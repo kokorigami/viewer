@@ -1,0 +1,22 @@
+{
+  "name": "kokorigami-viewer",
+  "version": "0.0.0",
+  "description": "Origami viewer for kokorigami.",
+  "main": "main.js",
+  "scripts": {
+    "test": "mocha"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "browserify": "^12.0.1",
+    "chai": "^3.4.1",
+    "glslify": "^4.0.0",
+    "mocha": "^2.3.4",
+    "twgl.js": "0.0.25",
+    "underscore": "^1.8.3"
+  },
+  "browserify": {
+    "transform": ["glslify"]
+  }
+}
