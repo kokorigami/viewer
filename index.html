@@ -1,5 +1,6 @@
 <!doctype html>
 <head>
+  <script src="./bundle.js"></script>
 </head>
 <body>
   <style>
@@ -14,163 +15,49 @@
       position: absolute;
     }
   </style>
-  <script id="fs-face" type="x-shader/x-fragment">
-    precision mediump float;
-    varying vec4 v_color;
-    varying vec3 v_normal;
-    // varying vec2 v_texCoord;
-    varying vec3 v_surfaceToLight;
-    varying vec3 v_surfaceToView;
 
-    uniform vec4 u_lightColor;
-    uniform vec4 u_ambient;
-    uniform vec4 u_specular;
-    uniform float u_shininess;
-    uniform float u_specularFactor;
-    //uniform sampler2D u_texture;
+  <canvas id="viewer"></canvas>
 
-    vec4 lit(float l ,float h, float m) {
-      return vec4(1.0,
-                  max(l, 0.0),
-                  (l > 0.0) ? pow(max(0.0, h), m) : 0.0,
-                  1.0);
-    }
-    
-    void main() {
-      // vec4 texColor = texture2D(u_texture, v_texCoord);
-      vec4 texColor = v_color;
-      vec3 normal = normalize(v_normal);
-      vec3 surfaceToLight = normalize(v_surfaceToLight);
-      vec3 surfaceToView = normalize(v_surfaceToView);
-      vec3 halfVector = normalize(surfaceToLight + surfaceToView);
+  <script type="text/javascript">
+    var layers = [ [ [ [ 0.5, 0.5, 0 ],
+          [ 0, 0.2928932011127472, 0 ],
+          [ 0, 1, 0 ],
+          [ 1, 1, 0 ] ] ],
+      [ [ [ 0.5, 0.5, 0 ],
+          [ 1, 1, 0 ],
+          [ 0, 1, 0 ],
+          [ 0, 0.5, 0 ] ] ],
+      [ [ [ 0, 0.7071067690849304, 0 ],
+          [ 0.5, 0.5, 0 ],
+          [ 0, 0.5, 0 ] ] ],
+      [ [ [ -0.2071067988872528, 0.5, 0 ],
+          [ 0, 0.2928932011127472, 0 ],
+          [ 0.5, 0.5, 0 ] ],
+        [ [ -0.2071067988872528, 0.5, 0 ],
+          [ 0.5, 0.5, 0 ],
+          [ 0, 0.7071067690849304, 0 ] ] ] ];
 
-      vec4 litR = lit(dot(normal, surfaceToLight),
-                    dot(normal, halfVector), u_shininess);
+    var layerLines = [
+      [],
+      [],
+      [],
+      [
+        [[ -0.2071067988872528, 0.5, 0 ], [ 0.5, 0.5, 0 ]]
+      ]
+    ];
 
-      vec4 outColor = vec4(
-          (u_lightColor * (texColor * litR.y + texColor * u_ambient)).rgb,
-          texColor.a);
+    var points = [
+      [ 0.5, 0.5, 0 ]
+    ];
 
-      gl_FragColor = outColor;
-    }
+    var data = {
+      layers: layers,
+      folds: layerLines,
+      points: points
+    };
+
+    var canvas = document.getElementById('viewer');
+    var viewer = new KokorigamiViewer(canvas, data);
+    viewer.play();
   </script>
-
-  <script id="fs-face-depth" type="x-shader/x-fragment">
-    precision mediump float;
-    varying vec4 v_position;
-    varying vec3 v_normal;
-
-    uniform mat4 u_worldViewProjection;
-    uniform mat4 u_worldRotation;
-    uniform float u_near;
-    uniform float u_far;
-
-    float encode_depth (vec3 position) {
-      float depth = (position.z - u_near)/(u_far - u_near);
-      return depth;
-    }
-
-    vec3 encode_normal (vec3 normal) {
-      vec3 encoded = (normal + 1.0) / 2.0;
-      return encoded;
-    }
-
-    void main() {
-      vec3 position = (u_worldViewProjection * v_position).xyz;
-      vec3 normal = v_normal;
-      gl_FragColor = vec4(encode_normal(normal), encode_depth(position));
-    }
-  </script>
-
-  <script id="vs-face" type="x-shader/x-vertex">
-    precision mediump float;
-    attribute vec3 position;
-    attribute vec3 normal;
-    // attribute vec2 texcoord;
-    // attribute vec3 color;
-
-    varying vec4 v_position;
-    varying vec4 v_color;
-    varying vec3 v_normal;
-    // varying vec2 v_texCoord;
-    varying vec3 v_surfaceToLight;
-    varying vec3 v_surfaceToView;
-
-    uniform vec3 u_lightWorldPos;
-    uniform mat4 u_camera;
-    uniform mat4 u_worldViewProjection;
-    uniform mat4 u_world;
-    uniform mat4 u_worldRotation;
-    //uniform sampler2D u_texture;
-
-    void main() {
-      v_color = vec4(0.9, 0.5, 0.8, 1);
-      v_normal = (u_worldRotation * vec4(normal, 0)).xyz;
-      // v_texCoord = texcoord;
-      v_position = vec4(position, 1.0);
-      v_surfaceToLight = u_lightWorldPos - (u_world * v_position).xyz;
-      v_surfaceToView = (u_camera[3] - (u_world * v_position)).xyz;
-      gl_Position = (u_worldViewProjection * v_position);
-    }
-  </script>
-
-  <script id="fs-fold" type="x-shader/x-fragment">
-    precision mediump float;
-
-    uniform vec3 u_lightWorldPos;
-    uniform mat4 u_camera;
-    uniform mat4 u_worldViewProjection;
-    uniform mat4 u_world;
-    uniform mat4 u_worldRotation;
-
-    varying float v_foldType;
-    varying float v_lengthSoFar;
-    varying vec4 v_position;
-
-    const float dotSize = 0.1;
-    const float numDashes = 8.0;
-
-    void main() {
-      float upperLimit = v_foldType + dotSize / 2.0;
-      float lowerLimit = v_foldType - dotSize / 2.0;
-
-      float section = 2.0 * fract(v_lengthSoFar * numDashes);
-      float alpha = floor(section);
-      if (alpha == 0.0 && section > lowerLimit && section < upperLimit)
-        alpha = 1.0;
-
-      if (alpha == 0.0)
-        discard;
-      else
-        gl_FragColor = vec4(0, 0, 0, alpha);
-    }
-  </script>
-
-  <script id="vs-fold" type="x-shader/x-vertex">
-    precision mediump float;
-    attribute vec3 position;
-    attribute float foldType;
-    attribute float lengthSoFar;
-
-    uniform vec3 u_lightWorldPos;
-    uniform mat4 u_camera;
-    uniform mat4 u_worldViewProjection;
-    uniform mat4 u_world;
-    uniform mat4 u_worldRotation;
-
-    varying float v_foldType;
-    varying float v_lengthSoFar;
-    varying vec4 v_position;
-
-    void main() {
-      v_lengthSoFar = lengthSoFar;
-      v_position = vec4(position, 1);
-      v_foldType = foldType;
-      gl_Position = (u_worldViewProjection * v_position);
-    }
-  </script>
-
-  <script src="./twgl.js"></script>
-  <script src="./lodash.js"></script>
-  <script src="./main.js"></script>
 </body>

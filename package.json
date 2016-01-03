@@ -2,9 +2,10 @@
   "name": "kokorigami-viewer",
   "version": "0.0.0",
   "description": "Origami viewer for kokorigami.",
-  "main": "main.js",
+  "main": "viewer.js",
   "scripts": {
-    "test": "mocha"
+    "test": "mocha",
+    "prepublish": "browserify viewer.js > bundle.js -s KokorigamiViewer"
   },
   "author": "",
   "license": "ISC",
@@ -13,7 +14,7 @@
     "chai": "^3.4.1",
     "glslify": "^4.0.0",
     "mocha": "^2.3.4",
-    "twgl.js": "0.0.25",
+    "twgl.js": "0.0.38",
     "underscore": "^1.8.3"
   },
   "browserify": {
