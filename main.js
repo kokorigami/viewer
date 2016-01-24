@@ -1,4 +1,39 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.KokorigamiViewer = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+function Component(name, parent, _proto, extend) {
+  var proto = {};
+  var protoKeys = Object.keys(_proto || {});
+
+  protoKeys.forEach(function (key) {
+    var attr = _proto[key];
+    if (typeof attr === 'string') {
+      attr = createElementAttribute(attr);
+    } else if (typeof attr === 'function') {
+      attr = createFunctionAttribute(attr);
+    }
+
+    proto[key] = attr;
+  });
+
+  var prototype = Object.create(parent.prototype, proto);
+  return document.registerElement(name, {prototype: prototype, extends: extend});
+}
+
+module.exports = Component;
+
+function createElementAttribute(name) {
+  return {
+    get: function() { return JSON.parse(this.getAttribute(name)); },
+    set: function(val) { return this.setAttribute(name, JSON.stringify(val)); }
+  };
+}
+
+function createFunctionAttribute(fn) {
+  return {
+    value: fn
+  };
+}
+
+},{}],2:[function(require,module,exports){
 var _ = require('underscore')._;
 var twgl = require('twgl.js');
 var v3 = twgl.v3;
@@ -131,7 +166,7 @@ function triangulate (face) {
   }
 }
 
-},{"twgl.js":3,"underscore":4}],2:[function(require,module,exports){
+},{"twgl.js":4,"underscore":5}],3:[function(require,module,exports){
 var twgl = require('twgl.js');
 
 function createFoldBufferInfo (gl, foldsPerLayer) {
@@ -183,7 +218,7 @@ function square (x) {
   return x*x;
 }
 
-},{"twgl.js":3}],3:[function(require,module,exports){
+},{"twgl.js":4}],4:[function(require,module,exports){
 /**
  * @license twgl.js 0.0.38 Copyright (c) 2015, Gregg Tavares All Rights Reserved.
  * Available via the MIT license.
@@ -6943,7 +6978,7 @@ define("build/js/twgl-includer-full", function(){});
     return notrequirebecasebrowserifymessesup('main');
 }));
 
-},{}],4:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 //     Underscore.js 1.8.3
 //     http://underscorejs.org
 //     (c) 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
@@ -8493,7 +8528,7 @@ define("build/js/twgl-includer-full", function(){});
   }
 }.call(this));
 
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 
 var faceFs = "#define GLSLIFY 1\nprecision mediump float;\nvarying vec4 v_color;\nvarying vec3 v_normal;\n// varying vec2 v_texCoord;\nvarying vec3 v_surfaceToLight;\nvarying vec3 v_surfaceToView;\n\nuniform vec4 u_lightColor;\nuniform vec4 u_ambient;\nuniform vec4 u_specular;\nuniform float u_shininess;\nuniform float u_specularFactor;\n//uniform sampler2D u_texture;\n\nvec4 lit(float l ,float h, float m) {\n  return vec4(1.0,\n              max(l, 0.0),\n              (l > 0.0) ? pow(max(0.0, h), m) : 0.0,\n              1.0);\n}\n\nvoid main() {\n  // vec4 texColor = texture2D(u_texture, v_texCoord);\n  vec4 texColor = v_color;\n  vec3 normal = normalize(v_normal);\n  vec3 surfaceToLight = normalize(v_surfaceToLight);\n  vec3 surfaceToView = normalize(v_surfaceToView);\n  vec3 halfVector = normalize(surfaceToLight + surfaceToView);\n\n  vec4 litR = lit(dot(normal, surfaceToLight),\n                dot(normal, halfVector), u_shininess);\n\n  vec4 outColor = vec4(\n      (u_lightColor * (texColor * litR.y + texColor * u_ambient)).rgb,\n      texColor.a);\n\n  gl_FragColor = outColor;\n}\n";
 var faceVs = "#define GLSLIFY 1\nprecision mediump float;\nattribute vec3 position;\nattribute vec3 normal;\n// attribute vec2 texcoord;\n// attribute vec3 color;\n\nvarying vec4 v_position;\nvarying vec4 v_color;\nvarying vec3 v_normal;\n// varying vec2 v_texCoord;\nvarying vec3 v_surfaceToLight;\nvarying vec3 v_surfaceToView;\n\nuniform vec3 u_lightWorldPos;\nuniform mat4 u_camera;\nuniform mat4 u_worldViewProjection;\nuniform mat4 u_world;\nuniform mat4 u_worldRotation;\n//uniform sampler2D u_texture;\n\nvoid main() {\n  v_color = vec4(0.9, 0.5, 0.8, 1);\n  v_normal = (u_worldRotation * vec4(normal, 0)).xyz;\n  // v_texCoord = texcoord;\n  v_position = vec4(position, 1.0);\n  v_surfaceToLight = u_lightWorldPos - (u_world * v_position).xyz;\n  v_surfaceToView = (u_camera[3] - (u_world * v_position)).xyz;\n  gl_Position = (u_worldViewProjection * v_position);\n}\n";
@@ -8509,7 +8544,7 @@ var m4 = twgl.m4;
 var createFaceBufferInfo = require('./createFaceBufferInfo.js');
 var createFoldBufferInfo = require('./createFoldBufferInfo.js');
 
-var Viewer = function (canvas, data) {
+var Renderer = function (canvas, data) {
   var gl = this.gl = twgl.getWebGLContext(canvas);
   this.render = this.render.bind(this);
 
@@ -8523,13 +8558,15 @@ var Viewer = function (canvas, data) {
 
   this.rotation = [0, 0];
   this.onMouseDown = getOnMouseDown(this.rotation);
-  this.setup(data);
+  if (data) {
+    this.data(data);
+  }
   return this;
 };
 
-module.exports = Viewer;
+module.exports = Renderer;
 
-Viewer.prototype.setup = function (data) {
+Renderer.prototype.data = function (data) {
   var gl = this.gl;
   var facesPerLayer = data.layers;
   var foldsPerLayer = data.folds;
@@ -8540,14 +8577,15 @@ Viewer.prototype.setup = function (data) {
   return this;
 };
 
-Viewer.prototype.play = function () {
+Renderer.prototype.play = function () {
   // Setup listeners
+  this.stop();
   this.gl.canvas.addEventListener('mousedown', this.onMouseDown);
   this.frame = requestAnimationFrame(this.render);
   return this;
 };
 
-Viewer.prototype.render = function (time) {
+Renderer.prototype.render = function (time) {
   var gl = this.gl;
   twgl.resizeCanvasToDisplaySize(gl.canvas);
   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
@@ -8565,7 +8603,7 @@ Viewer.prototype.render = function (time) {
   requestAnimationFrame(this.render);
 };
 
-Viewer.prototype.getUniforms = function () {
+Renderer.prototype.getUniforms = function () {
   if (!this.uniforms) {
     this.uniforms = this.createUniforms();
   } else {
@@ -8583,7 +8621,7 @@ Viewer.prototype.getUniforms = function () {
   return this.uniforms;
 };
 
-Viewer.prototype.createUniforms = function () {
+Renderer.prototype.createUniforms = function () {
   var gl = this.gl;
   var eye = [0, 1, -4];
   var target = [0, 0.5, 0];
@@ -8622,7 +8660,7 @@ Viewer.prototype.createUniforms = function () {
   return uniforms;
 };
 
-Viewer.prototype.stop = function () {
+Renderer.prototype.stop = function () {
   // TODO: remove listeners animation frames
   cancelAnimationFrame(this.frame);
   this.gl.canvas.removeEventListener('mousedown', this.onMouseDown);
@@ -8710,5 +8748,36 @@ function renderPoint (point, div) {
   div.style.top = Math.floor(pixelPoint[1]) + 'px';
 }
 
-},{"./createFaceBufferInfo.js":1,"./createFoldBufferInfo.js":2,"twgl.js":3,"underscore":4}]},{},[5])(5)
+},{"./createFaceBufferInfo.js":2,"./createFoldBufferInfo.js":3,"twgl.js":4,"underscore":5}],7:[function(require,module,exports){
+var Component = require('./component.js');
+var Renderer = require('./renderer.js');
+
+var Viewer = Component('kokorigami-viewer', HTMLElement, {
+  _: {
+    writable: false,
+    enumerable: false,
+    value: {
+      shadow: null,
+      canvas: null,
+      renderer: null
+    }
+  },
+  data: 'data',
+  createdCallback: function () {
+    this._.shadow = this.createShadowRoot();
+    this._.canvas = document.createElement('canvas');
+    this._.shadow.appendChild(this._.canvas);
+    this._.renderer = new Renderer(this._.canvas, this.data);
+    return;
+  },
+  attributeChangedCallback: function () {
+    this._.renderer.data(this.data);
+    this._.renderer.play();
+    return;
+  }
+});
+
+module.exports = Viewer;
+
+},{"./component.js":1,"./renderer.js":6}]},{},[7])(7)
 });
