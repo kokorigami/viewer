@@ -8690,7 +8690,7 @@ function getOnMouseDown (rotation) {
     function onMouseMove (e) {
       var nextX = e.offsetX;
       var nextY = e.offsetY;
-      pan(rotation, nextX - currentX, nextY - currentY);
+      pan(rotation, nextX - currentX, nextY - currentY, canvas);
       currentX = nextX;
       currentY = nextY;
     }
@@ -8703,7 +8703,7 @@ function getOnMouseDown (rotation) {
   return onMouseDown;
 }
 
-function pan (rotation, dX, dY) {
+function pan (rotation, dX, dY, canvas) {
   rotation[0] += 10 * dY / canvas.clientHeight;
   rotation[1] += 10 * dX / canvas.clientWidth;
   return rotation;
