@@ -14,10 +14,14 @@
     "chai": "^3.4.1",
     "glslify": "^4.0.0",
     "mocha": "^2.3.4",
+    "stringify": "^3.2.0",
     "twgl.js": "0.0.38",
     "underscore": "^1.8.3"
   },
   "browserify": {
-    "transform": ["glslify"]
+    "transform": [
+      "stringify",
+      "glslify"
+    ]
   }
 }

@@ -8749,8 +8749,13 @@ function renderPoint (point, div) {
 }
 
 },{"./createFaceBufferInfo.js":2,"./createFoldBufferInfo.js":3,"twgl.js":4,"underscore":5}],7:[function(require,module,exports){
+module.exports = "<style>\n  canvas {\n    height: 100%;\n    width: 100%;\n  }\n</style>\n<canvas></canvas>\n";
+
+},{}],8:[function(require,module,exports){
 var Component = require('./component.js');
 var Renderer = require('./renderer.js');
+
+var viewerHtml = require('./viewer.html');
 
 var Viewer = Component('kokorigami-viewer', HTMLElement, {
   _: {
@@ -8758,16 +8763,16 @@ var Viewer = Component('kokorigami-viewer', HTMLElement, {
     enumerable: false,
     value: {
       shadow: null,
-      canvas: null,
       renderer: null
     }
   },
   data: 'data',
   createdCallback: function () {
     this._.shadow = this.createShadowRoot();
-    this._.canvas = document.createElement('canvas');
-    this._.shadow.appendChild(this._.canvas);
-    this._.renderer = new Renderer(this._.canvas, this.data);
+    this._.shadow.innerHTML = viewerHtml;
+
+    var canvas = this._.shadow.querySelector('canvas');
+    this._.renderer = new Renderer(canvas, this.data);
     return;
   },
   attributeChangedCallback: function () {
@@ -8779,5 +8784,5 @@ var Viewer = Component('kokorigami-viewer', HTMLElement, {
 
 module.exports = Viewer;
 
-},{"./component.js":1,"./renderer.js":6}]},{},[7])(7)
+},{"./component.js":1,"./renderer.js":6,"./viewer.html":7}]},{},[8])(8)
 });
