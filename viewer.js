@@ -3,7 +3,7 @@ var Renderer = require('./renderer.js');
 
 var viewerHtml = require('./viewer.html');
 
-var Viewer = Component('kokorigami-viewer', HTMLElement, {
+var Viewer = Component('kokorigami-viewer', {
   _: {
     writable: false,
     enumerable: false,
