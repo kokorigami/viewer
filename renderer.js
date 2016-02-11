@@ -12,6 +12,7 @@ var m4 = twgl.m4;
 
 var createFaceBufferInfo = require('./createFaceBufferInfo.js');
 var createFoldBufferInfo = require('./createFoldBufferInfo.js');
+var createXYPlaneBufferInfo = require('./createXYPlaneBufferInfo.js');
 
 var Renderer = function (canvas, data) {
   var gl = this.gl = twgl.getWebGLContext(canvas);
@@ -24,6 +25,17 @@ var Renderer = function (canvas, data) {
   this.faceProgramInfo = twgl.createProgramInfoFromProgram(gl, faceProgram);
   this.depthProgramInfo = twgl.createProgramInfoFromProgram(gl, depthProgram);
   this.foldProgramInfo = twgl.createProgramInfoFromProgram(gl, foldProgram);
+
+  this.planeBufferInfo = createXYPlaneBufferInfo(gl);
+
+  var attachments = [
+    { format: gl.RGBA, type: gl.UNSIGNED_BYTE, min: gl.LINEAR, wrap: gl.CLAMP_TO_EDGE }
+  ];
+  this.framebuffers = [
+    twgl.createFramebufferInfo(gl, attachments),
+    twgl.createFramebufferInfo(gl, attachments)
+  ];
+  this.fbIndex = 0;
 
   this.rotation = [0, 0];
   this.onMouseDown = getOnMouseDown(this.rotation);
@@ -59,12 +71,12 @@ Renderer.prototype.render = function (time) {
   twgl.resizeCanvasToDisplaySize(gl.canvas);
   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  gl.enable(gl.DEPTH_TEST);
-
   var uniforms = this.getUniforms();
 
-  //renderPass(gl, depthProgramInfo, faceBufferInfo, uniforms, 'TRIANGLES');
+  this.swapFramebuffer();
+  renderPass(gl, depthProgramInfo, faceBufferInfo, uniforms, 'TRIANGLES');
+
+  this.setFramebuffer(null);
   renderPass(gl, this.faceProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
   renderPass(gl, this.foldProgramInfo, this.foldBufferInfo, uniforms, 'LINES');
 
@@ -73,24 +85,6 @@ Renderer.prototype.render = function (time) {
 };
 
 Renderer.prototype.getUniforms = function () {
-  if (!this.uniforms) {
-    this.uniforms = this.createUniforms();
-  } else {
-    var rotateX = twgl.m4.rotationX(this.rotation[0]);
-    var rotateY = twgl.m4.rotationY(this.rotation[1]);
-    var world = twgl.m4.multiply(rotateX, rotateY);
-
-    var worldView = twgl.m4.multiply(world, this.uniforms.u_view);
-    var worldViewProjection = twgl.m4.multiply(world, this.uniforms.u_viewProjection);
-
-    this.uniforms.u_world = world;
-    this.uniforms.u_worldRotation = world;
-    this.uniforms.u_worldViewProjection = worldViewProjection;
-  }
-  return this.uniforms;
-};
-
-Renderer.prototype.createUniforms = function () {
   var gl = this.gl;
   var eye = [0, 1, -4];
   var target = [0, 0.5, 0];
@@ -98,7 +92,9 @@ Renderer.prototype.createUniforms = function () {
   var near = 1;
   var far = 100;
 
-  var projection = m4.perspective(30 * Math.PI / 180, gl.canvas.clientWidth / gl.canvas.clientHeight, near, far);
+  var width = gl.canvas.clientWidth;
+  var height = gl.canvas.clientHeight;
+  var projection = m4.perspective(30 * Math.PI / 180, width / height, near, far);
   var camera = m4.lookAt(eye, target, up);
   var view = m4.inverse(camera);
   var viewProjection = m4.multiply(view, projection);
@@ -124,9 +120,22 @@ Renderer.prototype.createUniforms = function () {
     u_viewProjection: viewProjection,
     u_worldViewProjection: worldViewProjection,
     u_worldRotation: world,
-    u_world: world
+    u_world: world,
+    u_screen: [width, height]
   };
   return uniforms;
+};
+
+Renderer.prototype.swapFramebuffer = function () {
+  var framebuffer = this.framebuffers[index];
+  this.setFramebuffer(framebuffer);
+  return this.fbIndex = 1 - this.fbIndex;
+};
+
+Renderer.prototype.setFramebuffer = function (framebuffer) {
+  this.gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  this.gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  this.gl.enable(gl.DEPTH_TEST);
 };
 
 Renderer.prototype.stop = function () {
