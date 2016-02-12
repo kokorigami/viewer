@@ -10,9 +10,9 @@ function Component(name, _proto, parent, extend) {
     if (typeof attr === 'function') {
       attr = createFunctionAttribute(attr);
     } else if (typeof attr === 'string') {
-      attr = createStringElementAttribute(key);
+      attr = createStringElementAttribute(key, attr);
     } else if (!isDefinedProperty(attr)) {
-      attr = createElementAttribute(key);
+      attr = createElementAttribute(key, attr);
     }
 
     proto[key] = attr;
@@ -25,22 +25,35 @@ function Component(name, _proto, parent, extend) {
 module.exports = Component;
 
 function isDefinedProperty(prop) {
+  if (!prop) return false;
   var isDataProp = 'value' in prop || 'writable' in prop;
   var isAccessProp = 'get' in prop || 'set' in prop;
   return isDataProp || isAccessProp;
 }
 
-function createElementAttribute(name) {
+function createElementAttribute(name, def) {
   return {
-    get: function() { return JSON.parse(this.getAttribute(name)); },
-    set: function(val) { return this.setAttribute(name, JSON.stringify(val)); }
+    get: function() {
+      if (!this.hasAttribute(name)) return def;
+      return JSON.parse(this.getAttribute(name));
+    },
+    set: function(val) {
+      if (val === null) return this.removeAttribute(name);
+      return this.setAttribute(name, JSON.stringify(val));
+    }
   };
 }
 
-function createStringElementAttribute(name) {
+function createStringElementAttribute(name, def) {
   return {
-    get: function() { return this.getAttribute(name); },
-    set: function(val) { return this.setAttribute(name, val); }
+    get: function() {
+      if (!this.hasAttribute(name)) return def;
+      return this.getAttribute(name);
+    },
+    set: function(val) {
+      if (val === null) return this.removeAttribute(name);
+      return this.setAttribute(name, val);
+    }
   };
 }
 
@@ -8783,7 +8796,7 @@ var Viewer = Component('kokorigami-viewer', {
       renderer: null
     }
   },
-  data: {},
+  data: null,
   createdCallback: function () {
     this._.shadow = this.createShadowRoot();
     this._.shadow.innerHTML = viewerHtml;
