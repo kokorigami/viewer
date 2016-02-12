@@ -1,14 +1,18 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.KokorigamiViewer = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-function Component(name, parent, _proto, extend) {
+function Component(name, _proto, parent, extend) {
+  parent = parent || HTMLElement;
+
   var proto = {};
   var protoKeys = Object.keys(_proto || {});
 
   protoKeys.forEach(function (key) {
     var attr = _proto[key];
-    if (typeof attr === 'string') {
-      attr = createElementAttribute(attr);
-    } else if (typeof attr === 'function') {
+    if (typeof attr === 'function') {
       attr = createFunctionAttribute(attr);
+    } else if (typeof attr === 'string') {
+      attr = createStringElementAttribute(key);
+    } else if (!isDefinedProperty(attr)) {
+      attr = createElementAttribute(key);
     }
 
     proto[key] = attr;
@@ -20,10 +24,23 @@ function Component(name, parent, _proto, extend) {
 
 module.exports = Component;
 
+function isDefinedProperty(prop) {
+  var isDataProp = 'value' in prop || 'writable' in prop;
+  var isAccessProp = 'get' in prop || 'set' in prop;
+  return isDataProp || isAccessProp;
+}
+
 function createElementAttribute(name) {
   return {
     get: function() { return JSON.parse(this.getAttribute(name)); },
     set: function(val) { return this.setAttribute(name, JSON.stringify(val)); }
+  };
+}
+
+function createStringElementAttribute(name) {
+  return {
+    get: function() { return this.getAttribute(name); },
+    set: function(val) { return this.setAttribute(name, val); }
   };
 }
 
@@ -8757,7 +8774,7 @@ var Renderer = require('./renderer.js');
 
 var viewerHtml = require('./viewer.html');
 
-var Viewer = Component('kokorigami-viewer', HTMLElement, {
+var Viewer = Component('kokorigami-viewer', {
   _: {
     writable: false,
     enumerable: false,
@@ -8766,7 +8783,7 @@ var Viewer = Component('kokorigami-viewer', HTMLElement, {
       renderer: null
     }
   },
-  data: 'data',
+  data: [],
   createdCallback: function () {
     this._.shadow = this.createShadowRoot();
     this._.shadow.innerHTML = viewerHtml;

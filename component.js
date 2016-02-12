@@ -9,9 +9,9 @@ function Component(name, _proto, parent, extend) {
     if (typeof attr === 'function') {
       attr = createFunctionAttribute(attr);
     } else if (typeof attr === 'string') {
-      attr = createStringElementAttribute(attr);
+      attr = createStringElementAttribute(key);
     } else if (!isDefinedProperty(attr)) {
-      attr = createElementAttribute(attr);
+      attr = createElementAttribute(key);
     }
 
     proto[key] = attr;
