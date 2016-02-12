@@ -12,7 +12,7 @@ var Viewer = Component('kokorigami-viewer', {
       renderer: null
     }
   },
-  data: [],
+  data: {},
   createdCallback: function () {
     this._.shadow = this.createShadowRoot();
     this._.shadow.innerHTML = viewerHtml;
