@@ -166,7 +166,7 @@ function triangulate (face) {
   }
 }
 
-},{"twgl.js":4,"underscore":5}],3:[function(require,module,exports){
+},{"twgl.js":5,"underscore":6}],3:[function(require,module,exports){
 var twgl = require('twgl.js');
 
 function createFoldBufferInfo (gl, foldsPerLayer) {
@@ -218,7 +218,31 @@ function square (x) {
   return x*x;
 }
 
-},{"twgl.js":4}],4:[function(require,module,exports){
+},{"twgl.js":5}],4:[function(require,module,exports){
+var twgl = require('twgl.js');
+
+function createXYPlaneBufferInfo (gl, w, h) {
+  w = w || 1;
+  h = h || 1;
+
+  var planeAttributes = {
+    position: [
+      0, 0,
+      0, h,
+      w, h,
+      0, 0,
+      w, h,
+      w, 0
+    ]
+  };
+  planeAttributes.position.numComponents = 2;
+
+  return twgl.createBufferInfoFromArrays(gl, planeAttributes);
+}
+
+module.exports = createXYPlaneBufferInfo;
+
+},{"twgl.js":5}],5:[function(require,module,exports){
 /**
  * @license twgl.js 0.0.38 Copyright (c) 2015, Gregg Tavares All Rights Reserved.
  * Available via the MIT license.
@@ -6978,7 +7002,7 @@ define("build/js/twgl-includer-full", function(){});
     return notrequirebecasebrowserifymessesup('main');
 }));
 
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 //     Underscore.js 1.8.3
 //     http://underscorejs.org
 //     (c) 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
@@ -8528,13 +8552,15 @@ define("build/js/twgl-includer-full", function(){});
   }
 }.call(this));
 
-},{}],6:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 
 var faceFs = "#define GLSLIFY 1\nprecision mediump float;\nvarying vec4 v_color;\nvarying vec3 v_normal;\n// varying vec2 v_texCoord;\nvarying vec3 v_surfaceToLight;\nvarying vec3 v_surfaceToView;\n\nuniform vec4 u_lightColor;\nuniform vec4 u_ambient;\nuniform vec4 u_specular;\nuniform float u_shininess;\nuniform float u_specularFactor;\n//uniform sampler2D u_texture;\n\nvec4 lit(float l ,float h, float m) {\n  return vec4(1.0,\n              max(l, 0.0),\n              (l > 0.0) ? pow(max(0.0, h), m) : 0.0,\n              1.0);\n}\n\nvoid main() {\n  // vec4 texColor = texture2D(u_texture, v_texCoord);\n  vec4 texColor = v_color;\n  vec3 normal = normalize(v_normal);\n  vec3 surfaceToLight = normalize(v_surfaceToLight);\n  vec3 surfaceToView = normalize(v_surfaceToView);\n  vec3 halfVector = normalize(surfaceToLight + surfaceToView);\n\n  vec4 litR = lit(dot(normal, surfaceToLight),\n                dot(normal, halfVector), u_shininess);\n\n  vec4 outColor = vec4(\n      (u_lightColor * (texColor * litR.y + texColor * u_ambient)).rgb,\n      texColor.a);\n\n  gl_FragColor = outColor;\n}\n";
 var faceVs = "#define GLSLIFY 1\nprecision mediump float;\nattribute vec3 position;\nattribute vec3 normal;\n// attribute vec2 texcoord;\n// attribute vec3 color;\n\nvarying vec4 v_position;\nvarying vec4 v_color;\nvarying vec3 v_normal;\n// varying vec2 v_texCoord;\nvarying vec3 v_surfaceToLight;\nvarying vec3 v_surfaceToView;\n\nuniform vec3 u_lightWorldPos;\nuniform mat4 u_camera;\nuniform mat4 u_worldViewProjection;\nuniform mat4 u_world;\nuniform mat4 u_worldRotation;\n//uniform sampler2D u_texture;\n\nvoid main() {\n  v_color = vec4(0.9, 0.5, 0.8, 1);\n  v_normal = (u_worldRotation * vec4(normal, 0)).xyz;\n  // v_texCoord = texcoord;\n  v_position = vec4(position, 1.0);\n  v_surfaceToLight = u_lightWorldPos - (u_world * v_position).xyz;\n  v_surfaceToView = (u_camera[3] - (u_world * v_position)).xyz;\n  gl_Position = (u_worldViewProjection * v_position);\n}\n";
 var foldFs = "#define GLSLIFY 1\nprecision mediump float;\n\nuniform vec3 u_lightWorldPos;\nuniform mat4 u_camera;\nuniform mat4 u_worldViewProjection;\nuniform mat4 u_world;\nuniform mat4 u_worldRotation;\n\nvarying float v_foldType;\nvarying float v_lengthSoFar;\nvarying vec4 v_position;\n\nconst float dotSize = 0.1;\nconst float numDashes = 8.0;\n\nvoid main() {\n  float upperLimit = v_foldType + dotSize / 2.0;\n  float lowerLimit = v_foldType - dotSize / 2.0;\n\n  float section = 2.0 * fract(v_lengthSoFar * numDashes);\n  float alpha = floor(section);\n  if (alpha == 0.0 && section > lowerLimit && section < upperLimit)\n    alpha = 1.0;\n\n  if (alpha == 0.0)\n    discard;\n  else\n    gl_FragColor = vec4(0, 0, 0, alpha);\n}\n";
 var foldVs = "#define GLSLIFY 1\nprecision mediump float;\nattribute vec3 position;\nattribute float foldType;\nattribute float lengthSoFar;\n\nuniform vec3 u_lightWorldPos;\nuniform mat4 u_camera;\nuniform mat4 u_worldViewProjection;\nuniform mat4 u_world;\nuniform mat4 u_worldRotation;\n\nvarying float v_foldType;\nvarying float v_lengthSoFar;\nvarying vec4 v_position;\n\nvoid main() {\n  v_lengthSoFar = lengthSoFar;\n  v_position = vec4(position, 1);\n  v_foldType = foldType;\n  gl_Position = (u_worldViewProjection * v_position);\n}\n";
 var depthnormalFs = "#define GLSLIFY 1\nprecision mediump float;\nvarying vec4 v_position;\nvarying vec3 v_normal;\n\nuniform mat4 u_worldViewProjection;\nuniform mat4 u_worldRotation;\nuniform float u_near;\nuniform float u_far;\n\nfloat encode_depth (vec3 position) {\n  float depth = (position.z - u_near)/(u_far - u_near);\n  return depth;\n}\n\nvec3 encode_normal (vec3 normal) {\n  vec3 encoded = (normal + 1.0) / 2.0;\n  return encoded;\n}\n\nvoid main() {\n  vec3 position = (u_worldViewProjection * v_position).xyz;\n  vec3 normal = v_normal;\n  gl_FragColor = vec4(encode_normal(normal), encode_depth(position));\n}\n";
+var ssaoFs = "#define GLSLIFY 1\nprecision mediump float;\nuniform sampler2D u_sampler;\nuniform vec2 u_screen;\nuniform float u_near;\nuniform float u_far;\n\nconst int checkPixels = 16;\n\nfloat decode_depth (float depth) {\n  return depth * (u_far - u_near) + u_near;\n}\n\nvec3 decode_normal (vec3 encoded) {\n  return encoded * 2.0 - 1.0;\n}\n\nvec2 to_position (vec3 pixel) {\n  return vec2(pixel.x / u_screen.x, pixel.y / u_screen.y);\n}\n\nvec4 read_depthnormal (vec3 pixel) {\n  vec2 position = to_position(pixel);\n  vec4 encoded = texture2D(u_sampler, position);\n  vec4 decoded = vec4(decode_normal(encoded.stp), decode_depth(encoded.q));\n  return decoded;\n}\n\nfloat read_horizonX (vec4 decoded0, vec3 pixel) {\n  vec2 position = to_position(pixel);\n  vec4 decoded1 = read_depthnormal(pixel);\n  float hyp = distance(vec2(0.0, decoded0.a), vec2(position.x, decoded1.a));\n  return (decoded1.a - decoded0.a) / hyp;\n}\n\nfloat read_horizonY (vec4 decoded0, vec3 pixel) {\n  vec2 position = to_position(pixel);\n  vec4 decoded1 = read_depthnormal(pixel);\n  float hyp = distance(vec2(0.0, decoded0.a), vec2(position.y, decoded1.a));\n  return (decoded1.a - decoded0.a) / hyp;\n}\n\nfloat read_AO (vec3 pixel) {\n  vec4 decoded = read_depthnormal(pixel);\n  float sinT_X = decoded.x;\n  float sinT_Y = decoded.y;\n  float sinH_upX = 0.0;\n  float sinH_dnX = 0.0;\n  float sinH_upY = 0.0;\n  float sinH_dnY = 0.0;\n\n  // Up x\n  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 1.0, pixel.yz)));\n  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 2.0, pixel.yz)));\n  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 3.0, pixel.yz)));\n  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 4.0, pixel.yz)));\n  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 5.0, pixel.yz)));\n  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 6.0, pixel.yz)));\n  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 7.0, pixel.yz)));\n  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 8.0, pixel.yz)));\n\n  // Down x\n  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 1.0, pixel.yz)));\n  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 2.0, pixel.yz)));\n  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 3.0, pixel.yz)));\n  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 4.0, pixel.yz)));\n  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 5.0, pixel.yz)));\n  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 6.0, pixel.yz)));\n  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 7.0, pixel.yz)));\n  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 8.0, pixel.yz)));\n\n  // Up x\n  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 1.0, pixel.z)));\n  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 2.0, pixel.z)));\n  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 3.0, pixel.z)));\n  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 4.0, pixel.z)));\n  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 5.0, pixel.z)));\n  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 6.0, pixel.z)));\n  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 7.0, pixel.z)));\n  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 8.0, pixel.z)));\n\n  // Down x\n  sinH_dnY = max(sinH_dnY, read_horizonY(decoded, vec3(pixel.x, pixel.y - 1.0, pixel.z)));\n  sinH_dnY = max(sinH_dnY, read_horizonY(decoded, vec3(pixel.x, pixel.y - 2.0, pixel.z)));\n  sinH_dnY = max(sinH_dnY, read_horizonY(decoded, vec3(pixel.x, pixel.y - 3.0, pixel.z)));\n  sinH_dnY = max(sinH_dnY, read_horizonY(decoded, vec3(pixel.x, pixel.y - 4.0, pixel.z)));\n  sinH_dnY = max(sinH_dnY, read_horizonY(decoded, vec3(pixel.x, pixel.y - 5.0, pixel.z)));\n  sinH_dnY = max(sinH_dnY, read_horizonY(decoded, vec3(pixel.x, pixel.y - 6.0, pixel.z)));\n  sinH_dnY = max(sinH_dnY, read_horizonY(decoded, vec3(pixel.x, pixel.y - 7.0, pixel.z)));\n  sinH_dnY = max(sinH_dnY, read_horizonY(decoded, vec3(pixel.x, pixel.y - 8.0, pixel.z)));\n\n  float AO = (sinH_upX - sinT_X)*(sinH_dnX + sinT_X)*(sinH_upY - sinT_Y)*(sinH_dnY + sinT_Y);\n  return AO;\n}\n\nvoid main() {\n  vec3 pixel = gl_FragCoord.xyz;\n  float AO = read_AO(pixel);\n  gl_FragColor = vec4(AO, AO, AO, 1.0);\n}\n";
+var ssaoVs = "#define GLSLIFY 1\nattribute vec2 position;\nvoid main() {\n  gl_Position = vec4(position, 0.0, 1.0);\n}\n";
 
 var _ = require('underscore')._;
 var twgl = require('twgl.js');
@@ -8543,6 +8569,7 @@ var m4 = twgl.m4;
 
 var createFaceBufferInfo = require('./createFaceBufferInfo.js');
 var createFoldBufferInfo = require('./createFoldBufferInfo.js');
+var createXYPlaneBufferInfo = require('./createXYPlaneBufferInfo.js');
 
 var Renderer = function (canvas, data) {
   var gl = this.gl = twgl.getWebGLContext(canvas);
@@ -8550,11 +8577,24 @@ var Renderer = function (canvas, data) {
 
   var faceProgram = twgl.createProgramFromSources(gl, [faceVs, faceFs]);
   var depthProgram = twgl.createProgramFromSources(gl, [faceVs, depthnormalFs]);
+  var ssaoProgram = twgl.createProgramFromSources(gl, [ssaoVs, ssaoFs]);
   var foldProgram = twgl.createProgramFromSources(gl, [foldVs, foldFs]);
 
   this.faceProgramInfo = twgl.createProgramInfoFromProgram(gl, faceProgram);
-  this.depthProgramInfo = twgl.createProgramInfoFromProgram(gl, depthProgram);
   this.foldProgramInfo = twgl.createProgramInfoFromProgram(gl, foldProgram);
+  this.depthProgramInfo = twgl.createProgramInfoFromProgram(gl, depthProgram);
+  this.ssaoProgramInfo = twgl.createProgramInfoFromProgram(gl, ssaoProgram);
+
+  this.planeBufferInfo = createXYPlaneBufferInfo(gl);
+
+  var attachments = [
+    { format: gl.RGBA, type: gl.UNSIGNED_BYTE, min: gl.LINEAR, wrap: gl.CLAMP_TO_EDGE }
+  ];
+  this.framebuffers = [
+    twgl.createFramebufferInfo(gl, attachments),
+    twgl.createFramebufferInfo(gl, attachments)
+  ];
+  this.fbIndex = 0;
 
   this.rotation = [0, 0];
   this.onMouseDown = getOnMouseDown(this.rotation);
@@ -8590,38 +8630,22 @@ Renderer.prototype.render = function (time) {
   twgl.resizeCanvasToDisplaySize(gl.canvas);
   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  gl.enable(gl.DEPTH_TEST);
-
   var uniforms = this.getUniforms();
 
-  //renderPass(gl, depthProgramInfo, faceBufferInfo, uniforms, 'TRIANGLES');
-  renderPass(gl, this.faceProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
-  renderPass(gl, this.foldProgramInfo, this.foldBufferInfo, uniforms, 'LINES');
+  this.swapFramebuffer();
+  renderPass(gl, this.depthProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
+
+  this.setFramebuffer(null);
+  renderPass(gl, this.ssaoProgramInfo, this.planeBufferInfo, uniforms, 'TRIANGLES');
+  // renderPass(gl, this.faceProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
+  // renderPass(gl, this.foldProgramInfo, this.foldBufferInfo, uniforms, 'LINES');
+
 
   //renderPoints(points, pointDivs);
   requestAnimationFrame(this.render);
 };
 
 Renderer.prototype.getUniforms = function () {
-  if (!this.uniforms) {
-    this.uniforms = this.createUniforms();
-  } else {
-    var rotateX = twgl.m4.rotationX(this.rotation[0]);
-    var rotateY = twgl.m4.rotationY(this.rotation[1]);
-    var world = twgl.m4.multiply(rotateX, rotateY);
-
-    var worldView = twgl.m4.multiply(world, this.uniforms.u_view);
-    var worldViewProjection = twgl.m4.multiply(world, this.uniforms.u_viewProjection);
-
-    this.uniforms.u_world = world;
-    this.uniforms.u_worldRotation = world;
-    this.uniforms.u_worldViewProjection = worldViewProjection;
-  }
-  return this.uniforms;
-};
-
-Renderer.prototype.createUniforms = function () {
   var gl = this.gl;
   var eye = [0, 1, -4];
   var target = [0, 0.5, 0];
@@ -8629,7 +8653,9 @@ Renderer.prototype.createUniforms = function () {
   var near = 1;
   var far = 100;
 
-  var projection = m4.perspective(30 * Math.PI / 180, gl.canvas.clientWidth / gl.canvas.clientHeight, near, far);
+  var width = gl.canvas.clientWidth;
+  var height = gl.canvas.clientHeight;
+  var projection = m4.perspective(30 * Math.PI / 180, width / height, near, far);
   var camera = m4.lookAt(eye, target, up);
   var view = m4.inverse(camera);
   var viewProjection = m4.multiply(view, projection);
@@ -8655,9 +8681,24 @@ Renderer.prototype.createUniforms = function () {
     u_viewProjection: viewProjection,
     u_worldViewProjection: worldViewProjection,
     u_worldRotation: world,
-    u_world: world
+    u_world: world,
+    u_screen: [width, height]
   };
   return uniforms;
+};
+
+Renderer.prototype.swapFramebuffer = function () {
+  var framebuffer = this.framebuffers[this.fbIndex];
+  this.setFramebuffer(framebuffer);
+  return this.fbIndex = 1 - this.fbIndex;
+};
+
+Renderer.prototype.setFramebuffer = function (fbo) {
+  var gl = this.gl;
+  var framebuffer = fbo && fbo.framebuffer || null;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST);
 };
 
 Renderer.prototype.stop = function () {
@@ -8748,10 +8789,10 @@ function renderPoint (point, div) {
   div.style.top = Math.floor(pixelPoint[1]) + 'px';
 }
 
-},{"./createFaceBufferInfo.js":2,"./createFoldBufferInfo.js":3,"twgl.js":4,"underscore":5}],7:[function(require,module,exports){
+},{"./createFaceBufferInfo.js":2,"./createFoldBufferInfo.js":3,"./createXYPlaneBufferInfo.js":4,"twgl.js":5,"underscore":6}],8:[function(require,module,exports){
 module.exports = "<style>\n  canvas {\n    height: 100%;\n    width: 100%;\n  }\n</style>\n<canvas></canvas>\n";
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 var Component = require('./component.js');
 var Renderer = require('./renderer.js');
 
@@ -8784,5 +8825,5 @@ var Viewer = Component('kokorigami-viewer', HTMLElement, {
 
 module.exports = Viewer;
 
-},{"./component.js":1,"./renderer.js":6,"./viewer.html":7}]},{},[8])(8)
+},{"./component.js":1,"./renderer.js":7,"./viewer.html":8}]},{},[9])(9)
 });

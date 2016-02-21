@@ -4,6 +4,8 @@ var faceVs = glslify('./face-vs.glsl');
 var foldFs = glslify('./fold-fs.glsl');
 var foldVs = glslify('./fold-vs.glsl');
 var depthnormalFs = glslify('./depthnormal-fs.glsl');
+var ssaoFs = glslify('./ssao-fs.glsl');
+var ssaoVs = glslify('./ssao-vs.glsl');
 
 var _ = require('underscore')._;
 var twgl = require('twgl.js');
@@ -20,11 +22,13 @@ var Renderer = function (canvas, data) {
 
   var faceProgram = twgl.createProgramFromSources(gl, [faceVs, faceFs]);
   var depthProgram = twgl.createProgramFromSources(gl, [faceVs, depthnormalFs]);
+  var ssaoProgram = twgl.createProgramFromSources(gl, [ssaoVs, ssaoFs]);
   var foldProgram = twgl.createProgramFromSources(gl, [foldVs, foldFs]);
 
   this.faceProgramInfo = twgl.createProgramInfoFromProgram(gl, faceProgram);
-  this.depthProgramInfo = twgl.createProgramInfoFromProgram(gl, depthProgram);
   this.foldProgramInfo = twgl.createProgramInfoFromProgram(gl, foldProgram);
+  this.depthProgramInfo = twgl.createProgramInfoFromProgram(gl, depthProgram);
+  this.ssaoProgramInfo = twgl.createProgramInfoFromProgram(gl, ssaoProgram);
 
   this.planeBufferInfo = createXYPlaneBufferInfo(gl);
 
@@ -74,11 +78,13 @@ Renderer.prototype.render = function (time) {
   var uniforms = this.getUniforms();
 
   this.swapFramebuffer();
-  renderPass(gl, depthProgramInfo, faceBufferInfo, uniforms, 'TRIANGLES');
+  renderPass(gl, this.depthProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
 
   this.setFramebuffer(null);
-  renderPass(gl, this.faceProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
-  renderPass(gl, this.foldProgramInfo, this.foldBufferInfo, uniforms, 'LINES');
+  renderPass(gl, this.ssaoProgramInfo, this.planeBufferInfo, uniforms, 'TRIANGLES');
+  // renderPass(gl, this.faceProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
+  // renderPass(gl, this.foldProgramInfo, this.foldBufferInfo, uniforms, 'LINES');
+
 
   //renderPoints(points, pointDivs);
   requestAnimationFrame(this.render);
@@ -127,15 +133,17 @@ Renderer.prototype.getUniforms = function () {
 };
 
 Renderer.prototype.swapFramebuffer = function () {
-  var framebuffer = this.framebuffers[index];
+  var framebuffer = this.framebuffers[this.fbIndex];
   this.setFramebuffer(framebuffer);
   return this.fbIndex = 1 - this.fbIndex;
 };
 
-Renderer.prototype.setFramebuffer = function (framebuffer) {
-  this.gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-  this.gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  this.gl.enable(gl.DEPTH_TEST);
+Renderer.prototype.setFramebuffer = function (fbo) {
+  var gl = this.gl;
+  var framebuffer = fbo && fbo.framebuffer || null;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST);
 };
 
 Renderer.prototype.stop = function () {

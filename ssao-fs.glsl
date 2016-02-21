@@ -26,14 +26,14 @@ vec4 read_depthnormal (vec3 pixel) {
 }
 
 float read_horizonX (vec4 decoded0, vec3 pixel) {
-  vec2 position1 = to_position(pixel);
+  vec2 position = to_position(pixel);
   vec4 decoded1 = read_depthnormal(pixel);
-  float hyp = distance(vec2(0.0, decoded0.a), vec2(position1.x, decoded1.a));
+  float hyp = distance(vec2(0.0, decoded0.a), vec2(position.x, decoded1.a));
   return (decoded1.a - decoded0.a) / hyp;
 }
 
-float read_horizonX (vec4 decoded0, vec3 pixel) {
-  vec2 position1 = to_position(pixel);
+float read_horizonY (vec4 decoded0, vec3 pixel) {
+  vec2 position = to_position(pixel);
   vec4 decoded1 = read_depthnormal(pixel);
   float hyp = distance(vec2(0.0, decoded0.a), vec2(position.y, decoded1.a));
   return (decoded1.a - decoded0.a) / hyp;
@@ -49,51 +49,51 @@ float read_AO (vec3 pixel) {
   float sinH_dnY = 0.0;
 
   // Up x
-  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 1, pixel.yz)));
-  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 2, pixel.yz)));
-  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 3, pixel.yz)));
-  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 4, pixel.yz)));
-  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 5, pixel.yz)));
-  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 6, pixel.yz)));
-  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 7, pixel.yz)));
-  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 8, pixel.yz)));
+  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 1.0, pixel.yz)));
+  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 2.0, pixel.yz)));
+  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 3.0, pixel.yz)));
+  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 4.0, pixel.yz)));
+  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 5.0, pixel.yz)));
+  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 6.0, pixel.yz)));
+  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 7.0, pixel.yz)));
+  sinH_upX = max(sinH_upX, read_horizonX(decoded, vec3(pixel.x + 8.0, pixel.yz)));
 
   // Down x
-  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 1, pixel.yz)));
-  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 2, pixel.yz)));
-  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 3, pixel.yz)));
-  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 4, pixel.yz)));
-  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 5, pixel.yz)));
-  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 6, pixel.yz)));
-  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 7, pixel.yz)));
-  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 8, pixel.yz)));
+  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 1.0, pixel.yz)));
+  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 2.0, pixel.yz)));
+  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 3.0, pixel.yz)));
+  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 4.0, pixel.yz)));
+  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 5.0, pixel.yz)));
+  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 6.0, pixel.yz)));
+  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 7.0, pixel.yz)));
+  sinH_dnX = max(sinH_dnX, read_horizonX(decoded, vec3(pixel.x - 8.0, pixel.yz)));
 
   // Up x
-  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 1, pixel.z)));
-  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 2, pixel.z)));
-  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 3, pixel.z)));
-  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 4, pixel.z)));
-  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 5, pixel.z)));
-  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 6, pixel.z)));
-  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 7, pixel.z)));
-  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 8, pixel.z)));
+  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 1.0, pixel.z)));
+  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 2.0, pixel.z)));
+  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 3.0, pixel.z)));
+  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 4.0, pixel.z)));
+  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 5.0, pixel.z)));
+  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 6.0, pixel.z)));
+  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 7.0, pixel.z)));
+  sinH_upY = max(sinH_upY, read_horizonY(decoded, vec3(pixel.x, pixel.y + 8.0, pixel.z)));
 
   // Down x
-  sinH_dnX = max(sinH_dnX, read_horizonY(decoded, vec3(pixel.x, pixel.y - 1, pixel.z)));
-  sinH_dnX = max(sinH_dnX, read_horizonY(decoded, vec3(pixel.x, pixel.y - 2, pixel.z)));
-  sinH_dnX = max(sinH_dnX, read_horizonY(decoded, vec3(pixel.x, pixel.y - 3, pixel.z)));
-  sinH_dnX = max(sinH_dnX, read_horizonY(decoded, vec3(pixel.x, pixel.y - 4, pixel.z)));
-  sinH_dnX = max(sinH_dnX, read_horizonY(decoded, vec3(pixel.x, pixel.y - 5, pixel.z)));
-  sinH_dnX = max(sinH_dnX, read_horizonY(decoded, vec3(pixel.x, pixel.y - 6, pixel.z)));
-  sinH_dnX = max(sinH_dnX, read_horizonY(decoded, vec3(pixel.x, pixel.y - 7, pixel.z)));
-  sinH_dnX = max(sinH_dnX, read_horizonY(decoded, vec3(pixel.x, pixel.y - 8, pixel.z)));
+  sinH_dnY = max(sinH_dnY, read_horizonY(decoded, vec3(pixel.x, pixel.y - 1.0, pixel.z)));
+  sinH_dnY = max(sinH_dnY, read_horizonY(decoded, vec3(pixel.x, pixel.y - 2.0, pixel.z)));
+  sinH_dnY = max(sinH_dnY, read_horizonY(decoded, vec3(pixel.x, pixel.y - 3.0, pixel.z)));
+  sinH_dnY = max(sinH_dnY, read_horizonY(decoded, vec3(pixel.x, pixel.y - 4.0, pixel.z)));
+  sinH_dnY = max(sinH_dnY, read_horizonY(decoded, vec3(pixel.x, pixel.y - 5.0, pixel.z)));
+  sinH_dnY = max(sinH_dnY, read_horizonY(decoded, vec3(pixel.x, pixel.y - 6.0, pixel.z)));
+  sinH_dnY = max(sinH_dnY, read_horizonY(decoded, vec3(pixel.x, pixel.y - 7.0, pixel.z)));
+  sinH_dnY = max(sinH_dnY, read_horizonY(decoded, vec3(pixel.x, pixel.y - 8.0, pixel.z)));
 
   float AO = (sinH_upX - sinT_X)*(sinH_dnX + sinT_X)*(sinH_upY - sinT_Y)*(sinH_dnY + sinT_Y);
   return AO;
 }
 
 void main() {
-  vec3 pixel = gl_FragCoord;
+  vec3 pixel = gl_FragCoord.xyz;
   float AO = read_AO(pixel);
   gl_FragColor = vec4(AO, AO, AO, 1.0);
 }
