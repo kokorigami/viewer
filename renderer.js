@@ -14,7 +14,6 @@ var m4 = twgl.m4;
 
 var createFaceBufferInfo = require('./createFaceBufferInfo.js');
 var createFoldBufferInfo = require('./createFoldBufferInfo.js');
-var createXYPlaneBufferInfo = require('./createXYPlaneBufferInfo.js');
 
 var Renderer = function (canvas, data) {
   var gl = this.gl = twgl.getWebGLContext(canvas);
@@ -30,10 +29,10 @@ var Renderer = function (canvas, data) {
   this.depthProgramInfo = twgl.createProgramInfoFromProgram(gl, depthProgram);
   this.ssaoProgramInfo = twgl.createProgramInfoFromProgram(gl, ssaoProgram);
 
-  this.planeBufferInfo = createXYPlaneBufferInfo(gl);
+  this.planeBufferInfo = twgl.primitives.createXYQuadBufferInfo(gl);
 
   var attachments = [
-    { format: gl.RGBA, type: gl.UNSIGNED_BYTE, min: gl.LINEAR, wrap: gl.CLAMP_TO_EDGE }
+    {format: gl.RGBA, type: gl.UNSIGNED_BYTE, min: gl.LINEAR, wrap: gl.CLAMP_TO_EDGE}
   ];
   this.framebuffers = [
     twgl.createFramebufferInfo(gl, attachments),
@@ -77,6 +76,7 @@ Renderer.prototype.render = function (time) {
 
   var uniforms = this.getUniforms();
 
+  //this.setFramebuffer(null);
   this.swapFramebuffer();
   renderPass(gl, this.depthProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
 
