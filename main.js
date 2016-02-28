@@ -39,8 +39,8 @@ var twgl = require('twgl.js');
 var v3 = twgl.v3;
 
 function createFaceBufferInfo (gl, facesPerLayer) {
-  var faceArributes = getFaceBufferArrays(facesPerLayer);
-  var faceBufferInfo = twgl.createBufferInfoFromArrays(gl, faceArributes);
+  var faceAttributes = getFaceBufferArrays(facesPerLayer);
+  var faceBufferInfo = twgl.createBufferInfoFromArrays(gl, faceAttributes);
   return faceBufferInfo;
 }
 
@@ -132,7 +132,7 @@ function isClockwise (vertices) {
 
 function getNormal (face) {
   var vA = v3.subtract(face[1], face[0]);
-  var vB = v3.subtract(face[1], face[2]);
+  var vB = v3.subtract(face[2], face[0]);
   var cross = v3.cross(vA, vB);
   v3.normalize(cross, cross);
   return cross;
@@ -156,7 +156,7 @@ function triangulate (face) {
     var vertices = [];
     var first = face[0];
     var second = face[1];
-    for (i = 2; i < face.length; i++) {
+    for (var i = 2; i < face.length; i++) {
       vertices.push(first);
       vertices.push(second);
       vertices.push(face[i]);
@@ -8534,7 +8534,7 @@ var faceFs = "#define GLSLIFY 1\nprecision mediump float;\nvarying vec4 v_color;
 var faceVs = "#define GLSLIFY 1\nprecision mediump float;\nattribute vec3 position;\nattribute vec3 normal;\n// attribute vec2 texcoord;\n// attribute vec3 color;\n\nvarying vec4 v_position;\nvarying vec4 v_color;\nvarying vec3 v_normal;\n// varying vec2 v_texCoord;\nvarying vec3 v_surfaceToLight;\nvarying vec3 v_surfaceToView;\n\nuniform vec3 u_lightWorldPos;\nuniform mat4 u_camera;\nuniform mat4 u_worldViewProjection;\nuniform mat4 u_world;\nuniform mat4 u_worldRotation;\n//uniform sampler2D u_texture;\n\nvoid main() {\n  v_color = vec4(0.9, 0.5, 0.8, 1);\n  v_normal = (u_worldRotation * vec4(normal, 0)).xyz;\n  // v_texCoord = texcoord;\n  v_position = vec4(position, 1.0);\n  v_surfaceToLight = u_lightWorldPos - (u_world * v_position).xyz;\n  v_surfaceToView = (u_camera[3] - (u_world * v_position)).xyz;\n  gl_Position = (u_worldViewProjection * v_position);\n}\n";
 var foldFs = "#define GLSLIFY 1\nprecision mediump float;\n\nuniform vec3 u_lightWorldPos;\nuniform mat4 u_camera;\nuniform mat4 u_worldViewProjection;\nuniform mat4 u_world;\nuniform mat4 u_worldRotation;\n\nvarying float v_foldType;\nvarying float v_lengthSoFar;\nvarying vec4 v_position;\n\nconst float dotSize = 0.1;\nconst float numDashes = 8.0;\n\nvoid main() {\n  float upperLimit = v_foldType + dotSize / 2.0;\n  float lowerLimit = v_foldType - dotSize / 2.0;\n\n  float section = 2.0 * fract(v_lengthSoFar * numDashes);\n  float alpha = floor(section);\n  if (alpha == 0.0 && section > lowerLimit && section < upperLimit)\n    alpha = 1.0;\n\n  if (alpha == 0.0)\n    discard;\n  else\n    gl_FragColor = vec4(0, 0, 0, alpha);\n}\n";
 var foldVs = "#define GLSLIFY 1\nprecision mediump float;\nattribute vec3 position;\nattribute float foldType;\nattribute float lengthSoFar;\n\nuniform vec3 u_lightWorldPos;\nuniform mat4 u_camera;\nuniform mat4 u_worldViewProjection;\nuniform mat4 u_world;\nuniform mat4 u_worldRotation;\n\nvarying float v_foldType;\nvarying float v_lengthSoFar;\nvarying vec4 v_position;\n\nvoid main() {\n  v_lengthSoFar = lengthSoFar;\n  v_position = vec4(position, 1);\n  v_foldType = foldType;\n  gl_Position = (u_worldViewProjection * v_position);\n}\n";
-var depthnormalFs = "#define GLSLIFY 1\nprecision mediump float;\nvarying vec4 v_position;\nvarying vec3 v_normal;\n\nuniform mat4 u_worldViewProjection;\nuniform mat4 u_worldRotation;\nuniform float u_near;\nuniform float u_far;\n\nfloat encode_depth (vec3 position) {\n  float depth = (position.z - u_near)/(u_far - u_near);\n  return depth;\n}\n\nvec3 encode_normal (vec3 normal) {\n  vec3 encoded = (normal + 1.0) / 2.0;\n  return encoded;\n}\n\nvoid main() {\n  vec3 position = (u_worldViewProjection * v_position).xyz;\n  vec3 normal = v_normal;\n  gl_FragColor = vec4(encode_normal(normal), encode_depth(position));\n}\n";
+var depthnormalFs = "#define GLSLIFY 1\nprecision mediump float;\nvarying vec4 v_position;\nvarying vec3 v_normal;\n\nuniform mat4 u_worldViewProjection;\nuniform mat4 u_worldRotation;\nuniform float u_near;\nuniform float u_far;\n\nfloat encode_depth (vec3 position) {\n  float depth = (position.z - u_near)/(u_far - u_near);\n  return depth;\n}\n\nvec3 encode_normal (vec3 normal) {\n  vec3 encoded = (normal + 1.0) / 2.0;\n  return encoded;\n}\n\nvoid main() {\n  vec3 position = (u_worldViewProjection * v_position).xyz; // move to vshader?\n  vec3 normal = v_normal;\n  gl_FragColor = vec4(encode_normal(normal), 1);//encode_depth(position));\n}\n";
 var ssaoFs = "#define GLSLIFY 1\nprecision mediump float;\n\nvarying vec3 v_position;\nvarying vec2 v_texcoord;\n\nuniform sampler2D u_sampler;\nuniform vec2 u_screen;\nuniform float u_near;\nuniform float u_far;\n\nfloat decode_depth (float depth) {\n  return depth * (u_far - u_near) + u_near;\n}\n\nvec3 decode_normal (vec3 encoded) {\n  return encoded * 2.0 - 1.0;\n}\n\nvec4 read_depthnormal (vec3 position) {\n  vec2 texcoord = 0.5*(position.xy + 1.0);\n  vec4 encoded = texture2D(u_sampler, texcoord);\n  vec4 decoded = vec4(decode_normal(encoded.stp), decode_depth(encoded.q));\n  return decoded;\n}\n\nfloat read_horizonX (vec4 decoded0, vec3 position) {\n  vec4 decoded1 = read_depthnormal(position);\n  float hyp = distance(vec2(0.0, decoded0.a), vec2(position.x, decoded1.a));\n  return (decoded1.a - decoded0.a) / hyp;\n}\n\nfloat read_horizonY (vec4 decoded0, vec3 position) {\n  vec4 decoded1 = read_depthnormal(position);\n  float hyp = distance(vec2(0.0, decoded0.a), vec2(position.y, decoded1.a));\n  return (decoded1.a - decoded0.a) / hyp;\n}\n\nfloat read_AO (vec3 position) {\n  vec4 decoded = read_depthnormal(position);\n  float sinT_X = decoded.x;\n  float sinT_Y = decoded.y;\n  float sinH_upX = 0.0;\n  float sinH_dnX = 0.0;\n  float sinH_upY = 0.0;\n  float sinH_dnY = 0.0;\n\n  const int checkTexture = 8;\n  vec3 checkPosition;\n\n  // Up x\n  for (int i = 1; i < checkTexture + 1; i++) {\n    checkPosition = vec3(position.x + float(i)/u_screen.x, position.yz);\n    sinH_upX = max(sinH_upX, read_horizonX(decoded, checkPosition));\n  }\n\n  // Down x\n  for (int i = 1; i < checkTexture + 1; i++) {\n    checkPosition = vec3(position.x - float(i)/u_screen.x, position.yz);\n    sinH_dnX = max(sinH_dnX, read_horizonX(decoded, checkPosition));\n  }\n\n  // Up y\n  for (int i = 1; i < checkTexture + 1; i++) {\n    checkPosition = vec3(position.x, position.y + float(i)/u_screen.y, position.z);\n    sinH_upY = max(sinH_upY, read_horizonX(decoded, checkPosition));\n  }\n\n  // Down y\n  for (int i = 1; i < checkTexture + 1; i++) {\n    checkPosition = vec3(position.x, position.y - float(i)/u_screen.y, position.z);\n    sinH_dnY = max(sinH_dnY, read_horizonX(decoded, checkPosition));\n  }\n\n  float AO = (sinH_upX - sinT_X)*(sinH_dnX + sinT_X)*(sinH_upY - sinT_Y)*(sinH_dnY + sinT_Y);\n  return AO;\n}\n\nvoid main() {\n  float AO = read_AO(v_position);\n  gl_FragColor = vec4(AO, AO, AO, 1.0);\n}\n";
 var ssaoVs = "#define GLSLIFY 1\nattribute vec3 position;\nvarying vec3 v_position;\nvarying vec2 v_texcoord;\n\nvoid main() {\n  v_position = position;\n  v_texcoord = 0.5 * (position.xy + 1.0);\n  gl_Position = vec4(v_position, 1.0);\n}\n";
 
@@ -8604,11 +8604,11 @@ Renderer.prototype.render = function (time) {
   var uniforms = this.getUniforms();
 
   //this.setFramebuffer(null);
-  this.swapFramebuffer();
+  //this.swapFramebuffer();
   renderPass(gl, this.depthProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
 
-  this.setFramebuffer(null);
-  renderPass(gl, this.ssaoProgramInfo, this.planeBufferInfo, uniforms, 'TRIANGLES');
+  //this.setFramebuffer(null);
+  //renderPass(gl, this.ssaoProgramInfo, this.planeBufferInfo, uniforms, 'TRIANGLES');
   // renderPass(gl, this.faceProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
   // renderPass(gl, this.foldProgramInfo, this.foldBufferInfo, uniforms, 'LINES');
 
@@ -8652,7 +8652,7 @@ Renderer.prototype.getUniforms = function () {
     u_view: view,
     u_viewProjection: viewProjection,
     u_worldViewProjection: worldViewProjection,
-    u_worldRotation: world,
+    u_worldRotation: worldView,
     u_world: world,
     u_screen: [width, height]
   };

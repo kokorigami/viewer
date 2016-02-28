@@ -73,11 +73,11 @@ Renderer.prototype.render = function (time) {
   var uniforms = this.getUniforms();
 
   //this.setFramebuffer(null);
-  this.swapFramebuffer();
+  //this.swapFramebuffer();
   renderPass(gl, this.depthProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
 
-  this.setFramebuffer(null);
-  renderPass(gl, this.ssaoProgramInfo, this.planeBufferInfo, uniforms, 'TRIANGLES');
+  //this.setFramebuffer(null);
+  //renderPass(gl, this.ssaoProgramInfo, this.planeBufferInfo, uniforms, 'TRIANGLES');
   // renderPass(gl, this.faceProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
   // renderPass(gl, this.foldProgramInfo, this.foldBufferInfo, uniforms, 'LINES');
 
@@ -121,7 +121,7 @@ Renderer.prototype.getUniforms = function () {
     u_view: view,
     u_viewProjection: viewProjection,
     u_worldViewProjection: worldViewProjection,
-    u_worldRotation: world,
+    u_worldRotation: worldView,
     u_world: world,
     u_screen: [width, height]
   };

@@ -3,8 +3,8 @@ var twgl = require('twgl.js');
 var v3 = twgl.v3;
 
 function createFaceBufferInfo (gl, facesPerLayer) {
-  var faceArributes = getFaceBufferArrays(facesPerLayer);
-  var faceBufferInfo = twgl.createBufferInfoFromArrays(gl, faceArributes);
+  var faceAttributes = getFaceBufferArrays(facesPerLayer);
+  var faceBufferInfo = twgl.createBufferInfoFromArrays(gl, faceAttributes);
   return faceBufferInfo;
 }
 
@@ -96,7 +96,7 @@ function isClockwise (vertices) {
 
 function getNormal (face) {
   var vA = v3.subtract(face[1], face[0]);
-  var vB = v3.subtract(face[1], face[2]);
+  var vB = v3.subtract(face[2], face[0]);
   var cross = v3.cross(vA, vB);
   v3.normalize(cross, cross);
   return cross;
@@ -120,7 +120,7 @@ function triangulate (face) {
     var vertices = [];
     var first = face[0];
     var second = face[1];
-    for (i = 2; i < face.length; i++) {
+    for (var i = 2; i < face.length; i++) {
       vertices.push(first);
       vertices.push(second);
       vertices.push(face[i]);
