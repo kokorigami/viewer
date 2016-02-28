@@ -76,9 +76,6 @@ float read_AO (vec3 position) {
 }
 
 void main() {
-  // float AO = read_AO(v_position);
-  // gl_FragColor = vec4(AO, AO, AO, 1.0);
-  // gl_FragColor = vec4(1, 0, 0, 1);
-
-  gl_FragColor = texture2D(u_sampler, v_texcoord);
+  float AO = read_AO(v_position);
+  gl_FragColor = vec4(AO, AO, AO, 1.0);
 }
