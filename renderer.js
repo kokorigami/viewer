@@ -31,13 +31,7 @@ var Renderer = function (canvas, data) {
 
   this.planeBufferInfo = twgl.primitives.createXYQuadBufferInfo(gl);
 
-  var attachments = [
-    {format: gl.RGBA, type: gl.UNSIGNED_BYTE, min: gl.LINEAR, wrap: gl.CLAMP_TO_EDGE}
-  ];
-  this.framebuffers = [
-    twgl.createFramebufferInfo(gl, attachments),
-    twgl.createFramebufferInfo(gl, attachments)
-  ];
+  this.framebuffers = [];
   this.fbIndex = 0;
 
   this.rotation = [0, 0];
@@ -72,6 +66,8 @@ Renderer.prototype.play = function () {
 Renderer.prototype.render = function (time) {
   var gl = this.gl;
   twgl.resizeCanvasToDisplaySize(gl.canvas);
+  // console.log(gl.drawingBufferWidth, gl.drawingBufferHeight);
+  // var devicePixelRatio = window.devicePixelRatio;
   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
   var uniforms = this.getUniforms();
@@ -133,6 +129,15 @@ Renderer.prototype.getUniforms = function () {
 };
 
 Renderer.prototype.swapFramebuffer = function () {
+  var gl = this.gl;
+  var attachments = [
+    {format: gl.RGBA, type: gl.UNSIGNED_BYTE, min: gl.LINEAR, wrap: gl.CLAMP_TO_EDGE}
+  ];
+
+  if (!this.framebuffers[this.fbIndex]) {
+    this.framebuffers[this.fbIndex] = twgl.createFramebufferInfo(gl, attachments);
+  }
+
   var framebuffer = this.framebuffers[this.fbIndex];
   this.setFramebuffer(framebuffer);
   return this.fbIndex = 1 - this.fbIndex;
