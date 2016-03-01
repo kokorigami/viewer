@@ -62,13 +62,13 @@ float read_AO (vec3 position) {
   // Up y
   for (int i = 1; i < checkTexture + 1; i++) {
     checkPosition = vec3(position.x, position.y + float(i)/u_screen.y, position.z);
-    sinH_upY = max(sinH_upY, read_horizonX(decoded, checkPosition));
+    sinH_upY = max(sinH_upY, read_horizonY(decoded, checkPosition));
   }
 
   // Down y
   for (int i = 1; i < checkTexture + 1; i++) {
     checkPosition = vec3(position.x, position.y - float(i)/u_screen.y, position.z);
-    sinH_dnY = max(sinH_dnY, read_horizonX(decoded, checkPosition));
+    sinH_dnY = max(sinH_dnY, read_horizonY(decoded, checkPosition));
   }
 
   float AO = (sinH_upX - sinT_X)*(sinH_dnX + sinT_X)*(sinH_upY - sinT_Y)*(sinH_dnY + sinT_Y);
