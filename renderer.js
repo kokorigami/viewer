@@ -74,11 +74,11 @@ Renderer.prototype.render = function (time) {
 
   //this.setFramebuffer(null);
   //this.swapFramebuffer();
-  renderPass(gl, this.depthProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
+  //renderPass(gl, this.depthProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
 
   //this.setFramebuffer(null);
   //renderPass(gl, this.ssaoProgramInfo, this.planeBufferInfo, uniforms, 'TRIANGLES');
-  // renderPass(gl, this.faceProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
+  renderPass(gl, this.faceProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
   // renderPass(gl, this.foldProgramInfo, this.foldBufferInfo, uniforms, 'LINES');
 
 
