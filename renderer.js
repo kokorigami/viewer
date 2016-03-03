@@ -1,3 +1,6 @@
+var perspective = require('gl-mat4/perspective');
+var createCamera = require('3d-view');
+
 var glslify = require('glslify');
 var faceFs = glslify('./face-fs.glsl');
 var faceVs = glslify('./face-vs.glsl');
@@ -25,8 +28,14 @@ var Renderer = function (canvas, data) {
   this.depthProgramInfo = twgl.createProgramInfoFromProgram(gl, depthProgram);
   this.foldProgramInfo = twgl.createProgramInfoFromProgram(gl, foldProgram);
 
-  this.rotation = [0, 0];
-  this.onMouseDown = getOnMouseDown(this.rotation);
+  this.camera = createCamera({
+    center: [0, 0.5, 0],
+    eye: [0, 1, -4],
+    distanceLimits: [1, 100]
+  });
+
+  //this.rotation = [0, 0];
+  this.onMouseDown = getOnMouseDown(gl, this.camera);
   if (data) {
     this.data(data);
   }
@@ -54,7 +63,7 @@ Renderer.prototype.play = function () {
   return this;
 };
 
-Renderer.prototype.render = function (time) {
+Renderer.prototype.render = function () {
   var gl = this.gl;
   twgl.resizeCanvasToDisplaySize(gl.canvas);
   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
@@ -75,7 +84,8 @@ Renderer.prototype.render = function (time) {
 Renderer.prototype.getUniforms = function () {
   if (!this.uniforms) {
     this.uniforms = this.createUniforms();
-  } else {
+  }
+  else {
     var rotateX = twgl.m4.rotationX(this.rotation[0]);
     var rotateY = twgl.m4.rotationY(this.rotation[1]);
     var world = twgl.m4.multiply(rotateX, rotateY);
@@ -119,7 +129,7 @@ Renderer.prototype.createUniforms = function () {
     u_specular: [1, 1, 0.8, 1],
     u_shininess: 70,
     u_specularFactor: 0.8,
-    u_camera: camera,
+    u_camera: this.camera.computedMatrix,
     u_view: view,
     u_viewProjection: viewProjection,
     u_worldViewProjection: worldViewProjection,
@@ -145,26 +155,27 @@ function renderPass (gl, programInfo, bufferInfo, uniforms, drawType) {
   twgl.drawBufferInfo(gl, gl[drawType], bufferInfo);
 }
 
-function getOnMouseDown (rotation) {
-  var onMouseDown = function (e) {
-    var canvas = e.currentTarget;
+function getOnMouseDown (gl, camera) {
+  var onMouseDown = function (ev) {
+    var canvas = ev.currentTarget;
     canvas.addEventListener('mousemove', onMouseMove);
     canvas.addEventListener('mouseup', onMouseUp);
 
-    var startX = e.offsetX;
-    var startY = e.offsetY;
+    var startX = ev.offsetX;
+    var startY = ev.offsetY;
     var currentX = startX;
     var currentY = startY;
 
-    function onMouseMove (e) {
-      var nextX = e.offsetX;
-      var nextY = e.offsetY;
-      pan(rotation, nextX - currentX, nextY - currentY, canvas);
-      currentX = nextX;
-      currentY = nextY;
+    function onMouseMove (ev) {
+      var dx =  (ev.offsetX - currentX) / gl.drawingBufferWidth;
+      var dy = -(ev.offsetY - currentY) / gl.drawingBufferHeight;
+
+      camera.rotate(Date.now(), dx, dy);
+      currentX = ev.offsetX;
+      currentY = ev.offsetY;
     }
 
-    function onMouseUp (e) {
+    function onMouseUp () {
       canvas.removeEventListener('mousemove', onMouseMove);
       canvas.removeEventListener('mouseup', onMouseUp);
     }
@@ -172,47 +183,41 @@ function getOnMouseDown (rotation) {
   return onMouseDown;
 }
 
-function pan (rotation, dX, dY, canvas) {
-  rotation[0] += 10 * dY / canvas.clientHeight;
-  rotation[1] += 10 * dX / canvas.clientWidth;
-  return rotation;
-}
+// function toPixelClipSpace (gl, point) {
+//   var pixel = [];
+//   pixel[0] = (point[0] *  0.5 + 0.5) * gl.canvas.width;
+//   pixel[1] = (point[1] * -0.5 + 0.5) * gl.canvas.height;
+//   return pixel;
+// }
 
-function toPixelClipSpace (gl, point) {
-  var pixel = [];
-  pixel[0] = (point[0] *  0.5 + 0.5) * gl.canvas.width;
-  pixel[1] = (point[1] * -0.5 + 0.5) * gl.canvas.height;
-  return pixel;
-}
+// function createPointDivs (points) {
+//   return _.map(points, createPoint);
+// }
 
-function createPointDivs (points) {
-  return _.map(points, createPoint);
-}
+// function renderPoints(points, divs) {
+//   _.each(points, function (point, i) {
+//     renderPoint(point, divs[i]);
+//   });
+// }
 
-function renderPoints(points, divs) {
-  _.each(points, function (point, i) {
-    renderPoint(point, divs[i]);
-  });
-}
+// function createPoint (point, id) {
+//   var pointDiv = document.createElement('div');
+//   pointDiv.classList.add('floating');
+//   pointDiv.textContent = id;
+//   document.body.appendChild(pointDiv);
+//   return pointDiv;
+// }
 
-function createPoint (point, id) {
-  var pointDiv = document.createElement('div');
-  pointDiv.classList.add('floating');
-  pointDiv.textContent = id;
-  document.body.appendChild(pointDiv);
-  return pointDiv;
-}
+// function renderPoint (point, div) {
+//   var adjustedPoint = twgl.v3.create();
+//   adjustedPoint[0] = point[0];
+//   adjustedPoint[1] = point[1];
+//   adjustedPoint[2] = point[2];
 
-function renderPoint (point, div) {
-  var adjustedPoint = twgl.v3.create();
-  adjustedPoint[0] = point[0];
-  adjustedPoint[1] = point[1];
-  adjustedPoint[2] = point[2];
+//   twgl.m4.transformPoint(worldViewProjection, adjustedPoint, adjustedPoint);
 
-  twgl.m4.transformPoint(worldViewProjection, adjustedPoint, adjustedPoint);
+//   var pixelPoint = toPixelClipSpace(gl, adjustedPoint);
 
-  var pixelPoint = toPixelClipSpace(gl, adjustedPoint);
-
-  div.style.left = Math.floor(pixelPoint[0]) + 'px';
-  div.style.top = Math.floor(pixelPoint[1]) + 'px';
-}
+//   div.style.left = Math.floor(pixelPoint[0]) + 'px';
+//   div.style.top = Math.floor(pixelPoint[1]) + 'px';
+// }

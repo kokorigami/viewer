@@ -9,8 +9,10 @@
   },
   "author": "",
   "dependencies": {
+    "3d-view": "^2.0.0",
     "browserify": "^12.0.1",
     "chai": "^3.4.1",
+    "gl-mat4": "^1.1.4",
     "glslify": "^4.0.0",
     "mocha": "^2.3.4",
     "stringify": "^3.2.0",
