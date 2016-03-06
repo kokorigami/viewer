@@ -11,7 +11,7 @@ function createFaceBufferInfo (gl, facesPerLayer) {
 module.exports = createFaceBufferInfo;
 
 function getFaceBufferArrays (layers) {
-  var thickness = 0.2;
+  var thickness = 0.005;
   var positions = [];
   var normals = [];
 

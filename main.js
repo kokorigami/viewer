@@ -47,7 +47,7 @@ function createFaceBufferInfo (gl, facesPerLayer) {
 module.exports = createFaceBufferInfo;
 
 function getFaceBufferArrays (layers) {
-  var thickness = 0.2;
+  var thickness = 0.005;
   var positions = [];
   var normals = [];
 
@@ -8548,6 +8548,7 @@ var createFoldBufferInfo = require('./createFoldBufferInfo.js');
 
 var Renderer = function (canvas, data) {
   var gl = this.gl = twgl.getWebGLContext(canvas);
+  gl.enable(gl.DEPTH_TEST);
   this.render = this.render.bind(this);
 
   var faceProgram = twgl.createProgramFromSources(gl, [faceVs, faceFs]);
@@ -8579,7 +8580,6 @@ Renderer.prototype.data = function (data) {
   var gl = this.gl;
   var facesPerLayer = data.layers;
   var foldsPerLayer = data.folds;
-  var points = data.points;
 
   this.faceBufferInfo = createFaceBufferInfo(gl, facesPerLayer);
   this.foldBufferInfo = createFoldBufferInfo(gl, foldsPerLayer);
@@ -8594,8 +8594,9 @@ Renderer.prototype.play = function () {
   return this;
 };
 
-Renderer.prototype.render = function (time) {
+Renderer.prototype.render = function () {
   var gl = this.gl;
+
   twgl.resizeCanvasToDisplaySize(gl.canvas);
   // console.log(gl.drawingBufferWidth, gl.drawingBufferHeight);
   // var devicePixelRatio = window.devicePixelRatio;
@@ -8605,11 +8606,11 @@ Renderer.prototype.render = function (time) {
 
   //this.setFramebuffer(null);
   //this.swapFramebuffer();
-  //renderPass(gl, this.depthProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
+  renderPass(gl, this.depthProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
 
   //this.setFramebuffer(null);
   //renderPass(gl, this.ssaoProgramInfo, this.planeBufferInfo, uniforms, 'TRIANGLES');
-  renderPass(gl, this.faceProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
+  //renderPass(gl, this.faceProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
   // renderPass(gl, this.foldProgramInfo, this.foldBufferInfo, uniforms, 'LINES');
 
 
@@ -8679,7 +8680,6 @@ Renderer.prototype.setFramebuffer = function (fbo) {
   var framebuffer = fbo && fbo.framebuffer || null;
   gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  gl.enable(gl.DEPTH_TEST);
 };
 
 Renderer.prototype.stop = function () {
