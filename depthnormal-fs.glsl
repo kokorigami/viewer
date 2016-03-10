@@ -20,5 +20,5 @@ vec3 encode_normal (vec3 normal) {
 void main() {
   vec3 position = (u_worldViewProjection * v_position).xyz; // move to vshader?
   vec3 normal = v_normal;
-  gl_FragColor = vec4(encode_normal(normal), 1);//encode_depth(position));
+  gl_FragColor = vec4(encode_normal(normal), encode_depth(position));
 }

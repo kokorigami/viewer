@@ -67,18 +67,16 @@ Renderer.prototype.render = function () {
   var gl = this.gl;
 
   twgl.resizeCanvasToDisplaySize(gl.canvas);
-  // console.log(gl.drawingBufferWidth, gl.drawingBufferHeight);
-  // var devicePixelRatio = window.devicePixelRatio;
   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
   var uniforms = this.getUniforms();
 
   //this.setFramebuffer(null);
-  //this.swapFramebuffer();
+  this.swapFramebuffer();
   renderPass(gl, this.depthProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
 
-  //this.setFramebuffer(null);
-  //renderPass(gl, this.ssaoProgramInfo, this.planeBufferInfo, uniforms, 'TRIANGLES');
+  this.setFramebuffer(null);
+  renderPass(gl, this.ssaoProgramInfo, this.planeBufferInfo, uniforms, 'TRIANGLES');
   //renderPass(gl, this.faceProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
   // renderPass(gl, this.foldProgramInfo, this.foldBufferInfo, uniforms, 'LINES');
 
@@ -107,7 +105,7 @@ Renderer.prototype.getUniforms = function () {
   var world = m4.multiply(rotateX, rotateY);
 
   var worldView = m4.multiply(world, view);
-  var worldViewProjection = m4.multiply(world, viewProjection);
+  var worldViewProjection = m4.multiply(world, viewProjection); // projection, view, world (of object), point (of object)
 
   var uniforms = {
     u_near: near,
@@ -186,7 +184,7 @@ function getOnMouseDown (rotation) {
       currentY = nextY;
     }
 
-    function onMouseUp (e) {
+    function onMouseUp () {
       canvas.removeEventListener('mousemove', onMouseMove);
       canvas.removeEventListener('mouseup', onMouseUp);
     }
@@ -200,41 +198,41 @@ function pan (rotation, dX, dY, canvas) {
   return rotation;
 }
 
-function toPixelClipSpace (gl, point) {
-  var pixel = [];
-  pixel[0] = (point[0] *  0.5 + 0.5) * gl.canvas.width;
-  pixel[1] = (point[1] * -0.5 + 0.5) * gl.canvas.height;
-  return pixel;
-}
+// function toPixelClipSpace (gl, point) {
+//   var pixel = [];
+//   pixel[0] = (point[0] *  0.5 + 0.5) * gl.canvas.width;
+//   pixel[1] = (point[1] * -0.5 + 0.5) * gl.canvas.height;
+//   return pixel;
+// }
 
-function createPointDivs (points) {
-  return _.map(points, createPoint);
-}
+// function createPointDivs (points) {
+//   return _.map(points, createPoint);
+// }
 
-function renderPoints(points, divs) {
-  _.each(points, function (point, i) {
-    renderPoint(point, divs[i]);
-  });
-}
+// function renderPoints(points, divs) {
+//   _.each(points, function (point, i) {
+//     renderPoint(point, divs[i]);
+//   });
+// }
 
-function createPoint (point, id) {
-  var pointDiv = document.createElement('div');
-  pointDiv.classList.add('floating');
-  pointDiv.textContent = id;
-  document.body.appendChild(pointDiv);
-  return pointDiv;
-}
+// function createPoint (point, id) {
+//   var pointDiv = document.createElement('div');
+//   pointDiv.classList.add('floating');
+//   pointDiv.textContent = id;
+//   document.body.appendChild(pointDiv);
+//   return pointDiv;
+// }
 
-function renderPoint (point, div) {
-  var adjustedPoint = twgl.v3.create();
-  adjustedPoint[0] = point[0];
-  adjustedPoint[1] = point[1];
-  adjustedPoint[2] = point[2];
+// function renderPoint (point, div) {
+//   var adjustedPoint = twgl.v3.create();
+//   adjustedPoint[0] = point[0];
+//   adjustedPoint[1] = point[1];
+//   adjustedPoint[2] = point[2];
 
-  twgl.m4.transformPoint(worldViewProjection, adjustedPoint, adjustedPoint);
+//   twgl.m4.transformPoint(worldViewProjection, adjustedPoint, adjustedPoint);
 
-  var pixelPoint = toPixelClipSpace(gl, adjustedPoint);
+//   var pixelPoint = toPixelClipSpace(gl, adjustedPoint);
 
-  div.style.left = Math.floor(pixelPoint[0]) + 'px';
-  div.style.top = Math.floor(pixelPoint[1]) + 'px';
-}
+//   div.style.left = Math.floor(pixelPoint[0]) + 'px';
+//   div.style.top = Math.floor(pixelPoint[1]) + 'px';
+// }
