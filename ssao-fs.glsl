@@ -26,14 +26,14 @@ vec4 read_depthnormal(vec2 texcoord) {
 
 float read_horizon(vec2 texcoord, vec2 direction) {
   float sinH;
-  float depth = read_depthnormal(texcoord).a; // Only depth position, otherwise normals
-  vec2 onePixel = vec2(1.0, 1.0) / u_screen;
+  float depth = read_depthnormal(texcoord).q;
+  vec2 onePixel = vec2(1, 1) / u_screen;
 
   for (int i = 1; i < numChecks + 1; i++) {
     vec2 offset = float(i) * direction;
     vec2 offsetcoord = texcoord + onePixel * offset;
-    float offsetdepth = read_depthnormal(offsetcoord).a;
-    float hyp = distance(vec3(0.0, 0.0, depth), vec3(offsetcoord, offsetdepth));
+    float offsetdepth = read_depthnormal(offsetcoord).q;
+    float hyp = distance(vec3(0, 0, depth), vec3(offsetcoord, offsetdepth));
     sinH = max(sinH, offsetdepth / hyp);
   }
   return sinH;
