@@ -1,4 +1,3 @@
-var perspective = require('gl-mat4/perspective');
 var createCamera = require('3d-view');
 
 var glslify = require('glslify');
@@ -8,10 +7,8 @@ var foldFs = glslify('./fold-fs.glsl');
 var foldVs = glslify('./fold-vs.glsl');
 var depthnormalFs = glslify('./depthnormal-fs.glsl');
 
-var _ = require('underscore')._;
 var twgl = require('twgl.js');
-var v3 = twgl.v3;
-var m4 = twgl.m4;
+var m4 = require('gl-mat4');
 
 var createFaceBufferInfo = require('./createFaceBufferInfo.js');
 var createFoldBufferInfo = require('./createFoldBufferInfo.js');
@@ -48,7 +45,7 @@ Renderer.prototype.data = function (data) {
   var gl = this.gl;
   var facesPerLayer = data.layers;
   var foldsPerLayer = data.folds;
-  var points = data.points;
+  // var points = data.points;
 
   this.faceBufferInfo = createFaceBufferInfo(gl, facesPerLayer);
   this.foldBufferInfo = createFoldBufferInfo(gl, foldsPerLayer);
@@ -65,13 +62,15 @@ Renderer.prototype.play = function () {
 
 Renderer.prototype.render = function () {
   var gl = this.gl;
+  var camera = this.camera;
+
   twgl.resizeCanvasToDisplaySize(gl.canvas);
   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);
 
-  var uniforms = this.getUniforms();
+  var uniforms = this.getUniforms(gl, camera);
 
   //renderPass(gl, depthProgramInfo, faceBufferInfo, uniforms, 'TRIANGLES');
   renderPass(gl, this.faceProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
@@ -81,58 +80,44 @@ Renderer.prototype.render = function () {
   requestAnimationFrame(this.render);
 };
 
-Renderer.prototype.getUniforms = function () {
+Renderer.prototype.getUniforms = function (gl, camera) {
   if (!this.uniforms) {
     this.uniforms = this.createUniforms();
   }
-  else {
-    var rotateX = twgl.m4.rotationX(this.rotation[0]);
-    var rotateY = twgl.m4.rotationY(this.rotation[1]);
-    var world = twgl.m4.multiply(rotateX, rotateY);
 
-    var worldView = twgl.m4.multiply(world, this.uniforms.u_view);
-    var worldViewProjection = twgl.m4.multiply(world, this.uniforms.u_viewProjection);
+  // Update camera uniforms.
+  var limits = camera.getDistanceLimits();
+  var view = camera.computedMatrix;
+  var projection = m4.perspective(
+      [],
+      Math.PI/4.0,
+      gl.drawingBufferWidth/gl.drawingBufferHeight,
+      limits[0],
+      limits[1]
+  );
 
-    this.uniforms.u_world = world;
-    this.uniforms.u_worldRotation = world;
-    this.uniforms.u_worldViewProjection = worldViewProjection;
-  }
+  var viewProjection = m4.multiply([], projection, view);
+  var worldViewProjection = m4.multiply([], viewProjection, this.uniforms.u_world);
+
+  this.uniforms.u_near = limits[0];
+  this.uniforms.u_far = limits[1];
+  this.uniforms.u_view = view;
+  this.uniforms.u_camera = m4.inverse([], view);
+  this.uniforms.u_worldViewProjection = worldViewProjection;
+
   return this.uniforms;
 };
 
 Renderer.prototype.createUniforms = function () {
-  var gl = this.gl;
-  var eye = [0, 1, -4];
-  var target = [0, 0.5, 0];
-  var up = [0, 1, 0];
-  var near = 1;
-  var far = 100;
-
-  var projection = m4.perspective(30 * Math.PI / 180, gl.canvas.clientWidth / gl.canvas.clientHeight, near, far);
-  var camera = m4.lookAt(eye, target, up);
-  var view = m4.inverse(camera);
-  var viewProjection = m4.multiply(view, projection);
-
-  var rotateX = m4.rotationX(this.rotation[0]);
-  var rotateY = m4.rotationY(this.rotation[1]);
-  var world = m4.multiply(rotateX, rotateY);
-
-  var worldView = m4.multiply(world, view);
-  var worldViewProjection = m4.multiply(world, viewProjection);
+  var world = m4.identity([]);
 
   var uniforms = {
-    u_near: near,
-    u_far: far,
     u_lightWorldPos: [-3, 3, -8],
     u_lightColor: [1, 0.9, 0.8, 1],
     u_ambient: [0, 0, 0, 1],
     u_specular: [1, 1, 0.8, 1],
     u_shininess: 70,
     u_specularFactor: 0.8,
-    u_camera: this.camera.computedMatrix,
-    u_view: view,
-    u_viewProjection: viewProjection,
-    u_worldViewProjection: worldViewProjection,
     u_worldRotation: world,
     u_world: world
   };
