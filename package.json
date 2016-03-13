@@ -2,10 +2,10 @@
   "name": "kokorigami-viewer",
   "version": "0.0.0",
   "description": "Origami viewer for kokorigami.",
-  "main": "main.js",
+  "main": "viewer.js",
   "scripts": {
     "test": "mocha",
-    "prepublish": "browserify viewer.js > main.js -s KokorigamiViewer"
+    "prepublish": "browserify viewer.js > example/main.js -s KokorigamiViewer"
   },
   "author": "",
   "dependencies": {
