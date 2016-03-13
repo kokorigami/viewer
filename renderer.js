@@ -27,8 +27,10 @@ var Renderer = function (canvas, data) {
 
   this.camera = createCamera({
     center: [0, 0.5, 0],
-    eye: [0, 1, -4],
-    distanceLimits: [1, 100]
+    eye: [0, 1, -3],
+    distanceLimits: [1, 100],
+    up: [0, 0, 1],
+    mode: 'orbit'
   });
 
   //this.rotation = [0, 0];
@@ -62,7 +64,6 @@ Renderer.prototype.play = function () {
 
 Renderer.prototype.render = function () {
   var gl = this.gl;
-  var camera = this.camera;
 
   twgl.resizeCanvasToDisplaySize(gl.canvas);
   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
@@ -70,7 +71,7 @@ Renderer.prototype.render = function () {
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);
 
-  var uniforms = this.getUniforms(gl, camera);
+  var uniforms = this.getUniforms();
 
   //renderPass(gl, depthProgramInfo, faceBufferInfo, uniforms, 'TRIANGLES');
   renderPass(gl, this.faceProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
@@ -80,29 +81,35 @@ Renderer.prototype.render = function () {
   requestAnimationFrame(this.render);
 };
 
-Renderer.prototype.getUniforms = function (gl, camera) {
+Renderer.prototype.getUniforms = function () {
   if (!this.uniforms) {
     this.uniforms = this.createUniforms();
   }
+  var gl = this.gl;
+  var t = Date.now();
+  var camera = this.camera;
+
+  camera.idle(t - 20);
+  camera.flush(t - 100);
+  camera.recalcMatrix(t - 25);
 
   // Update camera uniforms.
-  var limits = camera.getDistanceLimits();
   var view = camera.computedMatrix;
   var projection = m4.perspective(
       [],
       Math.PI/4.0,
       gl.drawingBufferWidth/gl.drawingBufferHeight,
-      limits[0],
-      limits[1]
+      1,
+      100
   );
 
   var viewProjection = m4.multiply([], projection, view);
   var worldViewProjection = m4.multiply([], viewProjection, this.uniforms.u_world);
 
-  this.uniforms.u_near = limits[0];
-  this.uniforms.u_far = limits[1];
+  this.uniforms.u_near = 1;
+  this.uniforms.u_far = 100;
   this.uniforms.u_view = view;
-  this.uniforms.u_camera = m4.inverse([], view);
+  this.uniforms.u_camera = m4.invert([], view);
   this.uniforms.u_worldViewProjection = worldViewProjection;
 
   return this.uniforms;
@@ -152,10 +159,10 @@ function getOnMouseDown (gl, camera) {
     var currentY = startY;
 
     function onMouseMove (ev) {
-      var dx =  (ev.offsetX - currentX) / gl.drawingBufferWidth;
-      var dy = -(ev.offsetY - currentY) / gl.drawingBufferHeight;
+      var dx = (ev.offsetX - currentX) * 4/ gl.drawingBufferWidth;
+      var dy = (ev.offsetY - currentY) * 4/ gl.drawingBufferHeight;
 
-      camera.rotate(Date.now(), dx, dy);
+      camera.rotate(Date.now(), -dx, dy);
       currentX = ev.offsetX;
       currentY = ev.offsetY;
     }

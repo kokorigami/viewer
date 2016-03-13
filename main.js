@@ -196,7 +196,7 @@ function triangulate (face) {
   }
 }
 
-},{"twgl.js":4,"underscore":5}],3:[function(require,module,exports){
+},{"twgl.js":54,"underscore":55}],3:[function(require,module,exports){
 var twgl = require('twgl.js');
 
 function createFoldBufferInfo (gl, foldsPerLayer) {
@@ -248,7 +248,3183 @@ function square (x) {
   return x*x;
 }
 
-},{"twgl.js":4}],4:[function(require,module,exports){
+},{"twgl.js":54}],4:[function(require,module,exports){
+'use strict'
+
+var bsearch   = require('binary-search-bounds')
+var m4interp  = require('mat4-interpolate')
+var invert44  = require('gl-mat4/invert')
+var rotateX   = require('gl-mat4/rotateX')
+var rotateY   = require('gl-mat4/rotateY')
+var rotateZ   = require('gl-mat4/rotateZ')
+var lookAt    = require('gl-mat4/lookAt')
+var translate = require('gl-mat4/translate')
+var scale     = require('gl-mat4/scale')
+var normalize = require('gl-vec3/normalize')
+
+var DEFAULT_CENTER = [0,0,0]
+
+module.exports = createMatrixCameraController
+
+function MatrixCameraController(initialMatrix) {
+  this._components    = initialMatrix.slice()
+  this._time          = [0]
+  this.prevMatrix     = initialMatrix.slice()
+  this.nextMatrix     = initialMatrix.slice()
+  this.computedMatrix = initialMatrix.slice()
+  this.computedInverse = initialMatrix.slice()
+  this.computedEye    = [0,0,0]
+  this.computedUp     = [0,0,0]
+  this.computedCenter = [0,0,0]
+  this.computedRadius = [0]
+  this._limits        = [-Infinity, Infinity]
+}
+
+var proto = MatrixCameraController.prototype
+
+proto.recalcMatrix = function(t) {
+  var time = this._time
+  var tidx = bsearch.le(time, t)
+  var mat = this.computedMatrix
+  if(tidx < 0) {
+    return
+  }
+  var comps = this._components
+  if(tidx === time.length-1) {
+    var ptr = 16*tidx
+    for(var i=0; i<16; ++i) {
+      mat[i] = comps[ptr++]
+    }
+  } else {
+    var dt = (time[tidx+1] - time[tidx])
+    var ptr = 16*tidx
+    var prev = this.prevMatrix
+    var allEqual = true
+    for(var i=0; i<16; ++i) {
+      prev[i] = comps[ptr++]
+    }
+    var next = this.nextMatrix
+    for(var i=0; i<16; ++i) {
+      next[i] = comps[ptr++]
+      allEqual = allEqual && (prev[i] === next[i])
+    }
+    if(dt < 1e-6 || allEqual) {
+      for(var i=0; i<16; ++i) {
+        mat[i] = prev[i]
+      }
+    } else {
+      m4interp(mat, prev, next, (t - time[tidx])/dt)
+    }
+  }
+
+  var up = this.computedUp
+  up[0] = mat[1]
+  up[1] = mat[5]
+  up[2] = mat[6]
+  normalize(up, up)
+
+  var imat = this.computedInverse
+  invert44(imat, mat)
+  var eye = this.computedEye
+  var w = imat[15]
+  eye[0] = imat[12]/w
+  eye[1] = imat[13]/w
+  eye[2] = imat[14]/w
+
+  var center = this.computedCenter
+  var radius = Math.exp(this.computedRadius[0])
+  for(var i=0; i<3; ++i) {
+    center[i] = eye[i] - mat[2+4*i] * radius
+  }
+}
+
+proto.idle = function(t) {
+  if(t < this.lastT()) {
+    return
+  }
+  var mc = this._components
+  var ptr = mc.length-16
+  for(var i=0; i<16; ++i) {
+    mc.push(mc[ptr++])
+  }
+  this._time.push(t)
+}
+
+proto.flush = function(t) {
+  var idx = bsearch.gt(this._time, t) - 2
+  if(idx < 0) {
+    return
+  }
+  this._time.slice(0, idx)
+  this._components.slice(0, 16*idx)
+}
+
+proto.lastT = function() {
+  return this._time[this._time.length-1]
+}
+
+proto.lookAt = function(t, eye, center, up) {
+  this.recalcMatrix(t)
+  eye    = eye || this.computedEye
+  center = center || DEFAULT_CENTER
+  up     = up || this.computedUp
+  this.setMatrix(t, lookAt(this.computedMatrix, eye, center, up))
+  var d2 = 0.0
+  for(var i=0; i<3; ++i) {
+    d2 += Math.pow(center[i] - eye[i], 2)
+  }
+  d2 = Math.log(Math.sqrt(d2))
+  this.computedRadius[0] = d2
+}
+
+proto.rotate = function(t, yaw, pitch, roll) {
+  this.recalcMatrix(t)
+  var mat = this.computedInverse
+  if(yaw)   rotateY(mat, mat, yaw)
+  if(pitch) rotateX(mat, mat, pitch)
+  if(roll)  rotateZ(mat, mat, roll)
+  this.setMatrix(t, invert44(this.computedMatrix, mat))
+}
+
+var tvec = [0,0,0]
+
+proto.pan = function(t, dx, dy, dz) {
+  tvec[0] = -(dx || 0.0)
+  tvec[1] = -(dy || 0.0)
+  tvec[2] = -(dz || 0.0)
+  this.recalcMatrix(t)
+  var mat = this.computedInverse
+  translate(mat, mat, tvec)
+  this.setMatrix(t, invert44(mat, mat))
+}
+
+proto.translate = function(t, dx, dy, dz) {
+  tvec[0] = dx || 0.0
+  tvec[1] = dy || 0.0
+  tvec[2] = dz || 0.0
+  this.recalcMatrix(t)
+  var mat = this.computedMatrix
+  translate(mat, mat, tvec)
+  this.setMatrix(t, mat)
+}
+
+proto.setMatrix = function(t, mat) {
+  if(t < this.lastT()) {
+    return
+  }
+  this._time.push(t)
+  for(var i=0; i<16; ++i) {
+    this._components.push(mat[i])
+  }
+}
+
+proto.setDistance = function(t, d) {
+  this.computedRadius[0] = d
+}
+
+proto.setDistanceLimits = function(a,b) {
+  var lim = this._limits
+  lim[0] = a
+  lim[1] = b
+}
+
+proto.getDistanceLimits = function(out) {
+  var lim = this._limits
+  if(out) {
+    out[0] = lim[0]
+    out[1] = lim[1]
+    return out
+  }
+  return lim
+}
+
+function createMatrixCameraController(options) {
+  options = options || {}
+  var matrix = options.matrix || 
+              [1,0,0,0,
+               0,1,0,0,
+               0,0,1,0,
+               0,0,0,1]
+  return new MatrixCameraController(matrix)
+}
+},{"binary-search-bounds":5,"gl-mat4/invert":40,"gl-mat4/lookAt":41,"gl-mat4/rotateX":47,"gl-mat4/rotateY":48,"gl-mat4/rotateZ":49,"gl-mat4/scale":50,"gl-mat4/translate":52,"gl-vec3/normalize":10,"mat4-interpolate":11}],5:[function(require,module,exports){
+"use strict"
+
+function compileSearch(funcName, predicate, reversed, extraArgs, useNdarray, earlyOut) {
+  var code = [
+    "function ", funcName, "(a,l,h,", extraArgs.join(","),  "){",
+earlyOut ? "" : "var i=", (reversed ? "l-1" : "h+1"),
+";while(l<=h){\
+var m=(l+h)>>>1,x=a", useNdarray ? ".get(m)" : "[m]"]
+  if(earlyOut) {
+    if(predicate.indexOf("c") < 0) {
+      code.push(";if(x===y){return m}else if(x<=y){")
+    } else {
+      code.push(";var p=c(x,y);if(p===0){return m}else if(p<=0){")
+    }
+  } else {
+    code.push(";if(", predicate, "){i=m;")
+  }
+  if(reversed) {
+    code.push("l=m+1}else{h=m-1}")
+  } else {
+    code.push("h=m-1}else{l=m+1}")
+  }
+  code.push("}")
+  if(earlyOut) {
+    code.push("return -1};")
+  } else {
+    code.push("return i};")
+  }
+  return code.join("")
+}
+
+function compileBoundsSearch(predicate, reversed, suffix, earlyOut) {
+  var result = new Function([
+  compileSearch("A", "x" + predicate + "y", reversed, ["y"], false, earlyOut),
+  compileSearch("B", "x" + predicate + "y", reversed, ["y"], true, earlyOut),
+  compileSearch("P", "c(x,y)" + predicate + "0", reversed, ["y", "c"], false, earlyOut),
+  compileSearch("Q", "c(x,y)" + predicate + "0", reversed, ["y", "c"], true, earlyOut),
+"function dispatchBsearch", suffix, "(a,y,c,l,h){\
+if(a.shape){\
+if(typeof(c)==='function'){\
+return Q(a,(l===undefined)?0:l|0,(h===undefined)?a.shape[0]-1:h|0,y,c)\
+}else{\
+return B(a,(c===undefined)?0:c|0,(l===undefined)?a.shape[0]-1:l|0,y)\
+}}else{\
+if(typeof(c)==='function'){\
+return P(a,(l===undefined)?0:l|0,(h===undefined)?a.length-1:h|0,y,c)\
+}else{\
+return A(a,(c===undefined)?0:c|0,(l===undefined)?a.length-1:l|0,y)\
+}}}\
+return dispatchBsearch", suffix].join(""))
+  return result()
+}
+
+module.exports = {
+  ge: compileBoundsSearch(">=", false, "GE"),
+  gt: compileBoundsSearch(">", false, "GT"),
+  lt: compileBoundsSearch("<", true, "LT"),
+  le: compileBoundsSearch("<=", true, "LE"),
+  eq: compileBoundsSearch("-", true, "EQ", true)
+}
+
+},{}],6:[function(require,module,exports){
+module.exports = cross;
+
+/**
+ * Computes the cross product of two vec3's
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a the first operand
+ * @param {vec3} b the second operand
+ * @returns {vec3} out
+ */
+function cross(out, a, b) {
+    var ax = a[0], ay = a[1], az = a[2],
+        bx = b[0], by = b[1], bz = b[2]
+
+    out[0] = ay * bz - az * by
+    out[1] = az * bx - ax * bz
+    out[2] = ax * by - ay * bx
+    return out
+}
+},{}],7:[function(require,module,exports){
+module.exports = dot;
+
+/**
+ * Calculates the dot product of two vec3's
+ *
+ * @param {vec3} a the first operand
+ * @param {vec3} b the second operand
+ * @returns {Number} dot product of a and b
+ */
+function dot(a, b) {
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+},{}],8:[function(require,module,exports){
+module.exports = length;
+
+/**
+ * Calculates the length of a vec3
+ *
+ * @param {vec3} a vector to calculate length of
+ * @returns {Number} length of a
+ */
+function length(a) {
+    var x = a[0],
+        y = a[1],
+        z = a[2]
+    return Math.sqrt(x*x + y*y + z*z)
+}
+},{}],9:[function(require,module,exports){
+module.exports = lerp;
+
+/**
+ * Performs a linear interpolation between two vec3's
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a the first operand
+ * @param {vec3} b the second operand
+ * @param {Number} t interpolation amount between the two inputs
+ * @returns {vec3} out
+ */
+function lerp(out, a, b, t) {
+    var ax = a[0],
+        ay = a[1],
+        az = a[2]
+    out[0] = ax + t * (b[0] - ax)
+    out[1] = ay + t * (b[1] - ay)
+    out[2] = az + t * (b[2] - az)
+    return out
+}
+},{}],10:[function(require,module,exports){
+module.exports = normalize;
+
+/**
+ * Normalize a vec3
+ *
+ * @param {vec3} out the receiving vector
+ * @param {vec3} a vector to normalize
+ * @returns {vec3} out
+ */
+function normalize(out, a) {
+    var x = a[0],
+        y = a[1],
+        z = a[2]
+    var len = x*x + y*y + z*z
+    if (len > 0) {
+        //TODO: evaluate use of glm_invsqrt here?
+        len = 1 / Math.sqrt(len)
+        out[0] = a[0] * len
+        out[1] = a[1] * len
+        out[2] = a[2] * len
+    }
+    return out
+}
+},{}],11:[function(require,module,exports){
+var lerp = require('gl-vec3/lerp')
+
+var recompose = require('mat4-recompose')
+var decompose = require('mat4-decompose')
+var determinant = require('gl-mat4/determinant')
+var slerp = require('quat-slerp')
+
+var state0 = state()
+var state1 = state()
+var tmp = state()
+
+module.exports = interpolate
+function interpolate(out, start, end, alpha) {
+    if (determinant(start) === 0 || determinant(end) === 0)
+        return false
+
+    //decompose the start and end matrices into individual components
+    var r0 = decompose(start, state0.translate, state0.scale, state0.skew, state0.perspective, state0.quaternion)
+    var r1 = decompose(end, state1.translate, state1.scale, state1.skew, state1.perspective, state1.quaternion)
+    if (!r0 || !r1)
+        return false    
+
+
+    //now lerp/slerp the start and end components into a temporary     lerp(tmptranslate, state0.translate, state1.translate, alpha)
+    lerp(tmp.translate, state0.translate, state1.translate, alpha)
+    lerp(tmp.skew, state0.skew, state1.skew, alpha)
+    lerp(tmp.scale, state0.scale, state1.scale, alpha)
+    lerp(tmp.perspective, state0.perspective, state1.perspective, alpha)
+    slerp(tmp.quaternion, state0.quaternion, state1.quaternion, alpha)
+
+    //and recompose into our 'out' matrix
+    recompose(out, tmp.translate, tmp.scale, tmp.skew, tmp.perspective, tmp.quaternion)
+    return true
+}
+
+function state() {
+    return {
+        translate: vec3(),
+        scale: vec3(1),
+        skew: vec3(),
+        perspective: vec4(),
+        quaternion: vec4()
+    }
+}
+
+function vec3(n) {
+    return [n||0,n||0,n||0]
+}
+
+function vec4() {
+    return [0,0,0,1]
+}
+},{"gl-mat4/determinant":34,"gl-vec3/lerp":9,"mat4-decompose":12,"mat4-recompose":14,"quat-slerp":15}],12:[function(require,module,exports){
+/*jshint unused:true*/
+/*
+Input:  matrix      ; a 4x4 matrix
+Output: translation ; a 3 component vector
+        scale       ; a 3 component vector
+        skew        ; skew factors XY,XZ,YZ represented as a 3 component vector
+        perspective ; a 4 component vector
+        quaternion  ; a 4 component vector
+Returns false if the matrix cannot be decomposed, true if it can
+
+
+References:
+https://github.com/kamicane/matrix3d/blob/master/lib/Matrix3d.js
+https://github.com/ChromiumWebApps/chromium/blob/master/ui/gfx/transform_util.cc
+http://www.w3.org/TR/css3-transforms/#decomposing-a-3d-matrix
+*/
+
+var normalize = require('./normalize')
+
+var create = require('gl-mat4/create')
+var clone = require('gl-mat4/clone')
+var determinant = require('gl-mat4/determinant')
+var invert = require('gl-mat4/invert')
+var transpose = require('gl-mat4/transpose')
+var vec3 = {
+    length: require('gl-vec3/length'),
+    normalize: require('gl-vec3/normalize'),
+    dot: require('gl-vec3/dot'),
+    cross: require('gl-vec3/cross')
+}
+
+var tmp = create()
+var perspectiveMatrix = create()
+var tmpVec4 = [0, 0, 0, 0]
+var row = [ [0,0,0], [0,0,0], [0,0,0] ]
+var pdum3 = [0,0,0]
+
+module.exports = function decomposeMat4(matrix, translation, scale, skew, perspective, quaternion) {
+    if (!translation) translation = [0,0,0]
+    if (!scale) scale = [0,0,0]
+    if (!skew) skew = [0,0,0]
+    if (!perspective) perspective = [0,0,0,1]
+    if (!quaternion) quaternion = [0,0,0,1]
+
+    //normalize, if not possible then bail out early
+    if (!normalize(tmp, matrix))
+        return false
+
+    // perspectiveMatrix is used to solve for perspective, but it also provides
+    // an easy way to test for singularity of the upper 3x3 component.
+    clone(perspectiveMatrix, tmp)
+
+    perspectiveMatrix[3] = 0
+    perspectiveMatrix[7] = 0
+    perspectiveMatrix[11] = 0
+    perspectiveMatrix[15] = 1
+
+    // If the perspectiveMatrix is not invertible, we are also unable to
+    // decompose, so we'll bail early. Constant taken from SkMatrix44::invert.
+    if (Math.abs(determinant(perspectiveMatrix) < 1e-8))
+        return false
+
+    var a03 = tmp[3], a13 = tmp[7], a23 = tmp[11],
+            a30 = tmp[12], a31 = tmp[13], a32 = tmp[14], a33 = tmp[15]
+
+    // First, isolate perspective.
+    if (a03 !== 0 || a13 !== 0 || a23 !== 0) {
+        tmpVec4[0] = a03
+        tmpVec4[1] = a13
+        tmpVec4[2] = a23
+        tmpVec4[3] = a33
+
+        // Solve the equation by inverting perspectiveMatrix and multiplying
+        // rightHandSide by the inverse.
+        // resuing the perspectiveMatrix here since it's no longer needed
+        var ret = invert(perspectiveMatrix, perspectiveMatrix)
+        if (!ret) return false
+        transpose(perspectiveMatrix, perspectiveMatrix)
+
+        //multiply by transposed inverse perspective matrix, into perspective vec4
+        vec4multMat4(perspective, tmpVec4, perspectiveMatrix)
+    } else { 
+        //no perspective
+        perspective[0] = perspective[1] = perspective[2] = 0
+        perspective[3] = 1
+    }
+
+    // Next take care of translation
+    translation[0] = a30
+    translation[1] = a31
+    translation[2] = a32
+
+    // Now get scale and shear. 'row' is a 3 element array of 3 component vectors
+    mat3from4(row, tmp)
+
+    // Compute X scale factor and normalize first row.
+    scale[0] = vec3.length(row[0])
+    vec3.normalize(row[0], row[0])
+
+    // Compute XY shear factor and make 2nd row orthogonal to 1st.
+    skew[0] = vec3.dot(row[0], row[1])
+    combine(row[1], row[1], row[0], 1.0, -skew[0])
+
+    // Now, compute Y scale and normalize 2nd row.
+    scale[1] = vec3.length(row[1])
+    vec3.normalize(row[1], row[1])
+    skew[0] /= scale[1]
+
+    // Compute XZ and YZ shears, orthogonalize 3rd row
+    skew[1] = vec3.dot(row[0], row[2])
+    combine(row[2], row[2], row[0], 1.0, -skew[1])
+    skew[2] = vec3.dot(row[1], row[2])
+    combine(row[2], row[2], row[1], 1.0, -skew[2])
+
+    // Next, get Z scale and normalize 3rd row.
+    scale[2] = vec3.length(row[2])
+    vec3.normalize(row[2], row[2])
+    skew[1] /= scale[2]
+    skew[2] /= scale[2]
+
+
+    // At this point, the matrix (in rows) is orthonormal.
+    // Check for a coordinate system flip.  If the determinant
+    // is -1, then negate the matrix and the scaling factors.
+    vec3.cross(pdum3, row[1], row[2])
+    if (vec3.dot(row[0], pdum3) < 0) {
+        for (var i = 0; i < 3; i++) {
+            scale[i] *= -1;
+            row[i][0] *= -1
+            row[i][1] *= -1
+            row[i][2] *= -1
+        }
+    }
+
+    // Now, get the rotations out
+    quaternion[0] = 0.5 * Math.sqrt(Math.max(1 + row[0][0] - row[1][1] - row[2][2], 0))
+    quaternion[1] = 0.5 * Math.sqrt(Math.max(1 - row[0][0] + row[1][1] - row[2][2], 0))
+    quaternion[2] = 0.5 * Math.sqrt(Math.max(1 - row[0][0] - row[1][1] + row[2][2], 0))
+    quaternion[3] = 0.5 * Math.sqrt(Math.max(1 + row[0][0] + row[1][1] + row[2][2], 0))
+
+    if (row[2][1] > row[1][2])
+        quaternion[0] = -quaternion[0]
+    if (row[0][2] > row[2][0])
+        quaternion[1] = -quaternion[1]
+    if (row[1][0] > row[0][1])
+        quaternion[2] = -quaternion[2]
+    return true
+}
+
+//will be replaced by gl-vec4 eventually
+function vec4multMat4(out, a, m) {
+    var x = a[0], y = a[1], z = a[2], w = a[3];
+    out[0] = m[0] * x + m[4] * y + m[8] * z + m[12] * w;
+    out[1] = m[1] * x + m[5] * y + m[9] * z + m[13] * w;
+    out[2] = m[2] * x + m[6] * y + m[10] * z + m[14] * w;
+    out[3] = m[3] * x + m[7] * y + m[11] * z + m[15] * w;
+    return out;
+}
+
+//gets upper-left of a 4x4 matrix into a 3x3 of vectors
+function mat3from4(out, mat4x4) {
+    out[0][0] = mat4x4[0]
+    out[0][1] = mat4x4[1]
+    out[0][2] = mat4x4[2]
+    
+    out[1][0] = mat4x4[4]
+    out[1][1] = mat4x4[5]
+    out[1][2] = mat4x4[6]
+
+    out[2][0] = mat4x4[8]
+    out[2][1] = mat4x4[9]
+    out[2][2] = mat4x4[10]
+}
+
+function combine(out, a, b, scale1, scale2) {
+    out[0] = a[0] * scale1 + b[0] * scale2
+    out[1] = a[1] * scale1 + b[1] * scale2
+    out[2] = a[2] * scale1 + b[2] * scale2
+}
+},{"./normalize":13,"gl-mat4/clone":31,"gl-mat4/create":33,"gl-mat4/determinant":34,"gl-mat4/invert":40,"gl-mat4/transpose":53,"gl-vec3/cross":6,"gl-vec3/dot":7,"gl-vec3/length":8,"gl-vec3/normalize":10}],13:[function(require,module,exports){
+module.exports = function normalize(out, mat) {
+    var m44 = mat[15]
+    // Cannot normalize.
+    if (m44 === 0) 
+        return false
+    var scale = 1 / m44
+    for (var i=0; i<16; i++)
+        out[i] = mat[i] * scale
+    return true
+}
+},{}],14:[function(require,module,exports){
+/*
+Input:  translation ; a 3 component vector
+        scale       ; a 3 component vector
+        skew        ; skew factors XY,XZ,YZ represented as a 3 component vector
+        perspective ; a 4 component vector
+        quaternion  ; a 4 component vector
+Output: matrix      ; a 4x4 matrix
+
+From: http://www.w3.org/TR/css3-transforms/#recomposing-to-a-3d-matrix
+*/
+
+var mat4 = {
+    identity: require('gl-mat4/identity'),
+    translate: require('gl-mat4/translate'),
+    multiply: require('gl-mat4/multiply'),
+    create: require('gl-mat4/create'),
+    scale: require('gl-mat4/scale'),
+    fromRotationTranslation: require('gl-mat4/fromRotationTranslation')
+}
+
+var rotationMatrix = mat4.create()
+var temp = mat4.create()
+
+module.exports = function recomposeMat4(matrix, translation, scale, skew, perspective, quaternion) {
+    mat4.identity(matrix)
+
+    //apply translation & rotation
+    mat4.fromRotationTranslation(matrix, quaternion, translation)
+
+    //apply perspective
+    matrix[3] = perspective[0]
+    matrix[7] = perspective[1]
+    matrix[11] = perspective[2]
+    matrix[15] = perspective[3]
+        
+    // apply skew
+    // temp is a identity 4x4 matrix initially
+    mat4.identity(temp)
+
+    if (skew[2] !== 0) {
+        temp[9] = skew[2]
+        mat4.multiply(matrix, matrix, temp)
+    }
+
+    if (skew[1] !== 0) {
+        temp[9] = 0
+        temp[8] = skew[1]
+        mat4.multiply(matrix, matrix, temp)
+    }
+
+    if (skew[0] !== 0) {
+        temp[8] = 0
+        temp[4] = skew[0]
+        mat4.multiply(matrix, matrix, temp)
+    }
+
+    //apply scale
+    mat4.scale(matrix, matrix, scale)
+    return matrix
+}
+},{"gl-mat4/create":33,"gl-mat4/fromRotationTranslation":36,"gl-mat4/identity":38,"gl-mat4/multiply":42,"gl-mat4/scale":50,"gl-mat4/translate":52}],15:[function(require,module,exports){
+module.exports = require('gl-quat/slerp')
+},{"gl-quat/slerp":16}],16:[function(require,module,exports){
+module.exports = slerp
+
+/**
+ * Performs a spherical linear interpolation between two quat
+ *
+ * @param {quat} out the receiving quaternion
+ * @param {quat} a the first operand
+ * @param {quat} b the second operand
+ * @param {Number} t interpolation amount between the two inputs
+ * @returns {quat} out
+ */
+function slerp (out, a, b, t) {
+  // benchmarks:
+  //    http://jsperf.com/quaternion-slerp-implementations
+
+  var ax = a[0], ay = a[1], az = a[2], aw = a[3],
+    bx = b[0], by = b[1], bz = b[2], bw = b[3]
+
+  var omega, cosom, sinom, scale0, scale1
+
+  // calc cosine
+  cosom = ax * bx + ay * by + az * bz + aw * bw
+  // adjust signs (if necessary)
+  if (cosom < 0.0) {
+    cosom = -cosom
+    bx = -bx
+    by = -by
+    bz = -bz
+    bw = -bw
+  }
+  // calculate coefficients
+  if ((1.0 - cosom) > 0.000001) {
+    // standard case (slerp)
+    omega = Math.acos(cosom)
+    sinom = Math.sin(omega)
+    scale0 = Math.sin((1.0 - t) * omega) / sinom
+    scale1 = Math.sin(t * omega) / sinom
+  } else {
+    // "from" and "to" quaternions are very close
+    //  ... so we can do a linear interpolation
+    scale0 = 1.0 - t
+    scale1 = t
+  }
+  // calculate final values
+  out[0] = scale0 * ax + scale1 * bx
+  out[1] = scale0 * ay + scale1 * by
+  out[2] = scale0 * az + scale1 * bz
+  out[3] = scale0 * aw + scale1 * bw
+
+  return out
+}
+
+},{}],17:[function(require,module,exports){
+'use strict'
+
+module.exports = quatFromFrame
+
+function quatFromFrame(
+  out,
+  rx, ry, rz,
+  ux, uy, uz,
+  fx, fy, fz) {
+  var tr = rx + uy + fz
+  if(l > 0) {
+    var l = Math.sqrt(tr + 1.0)
+    out[0] = 0.5 * (uz - fy) / l
+    out[1] = 0.5 * (fx - rz) / l
+    out[2] = 0.5 * (ry - uy) / l
+    out[3] = 0.5 * l
+  } else {
+    var tf = Math.max(rx, uy, fz)
+    var l = Math.sqrt(2 * tf - tr + 1.0)
+    if(rx >= tf) {
+      //x y z  order
+      out[0] = 0.5 * l
+      out[1] = 0.5 * (ux + ry) / l
+      out[2] = 0.5 * (fx + rz) / l
+      out[3] = 0.5 * (uz - fy) / l
+    } else if(uy >= tf) {
+      //y z x  order
+      out[0] = 0.5 * (ry + ux) / l
+      out[1] = 0.5 * l
+      out[2] = 0.5 * (fy + uz) / l
+      out[3] = 0.5 * (fx - rz) / l
+    } else {
+      //z x y  order
+      out[0] = 0.5 * (rz + fx) / l
+      out[1] = 0.5 * (uz + fy) / l
+      out[2] = 0.5 * l
+      out[3] = 0.5 * (ry - ux) / l
+    }
+  }
+  return out
+}
+},{}],18:[function(require,module,exports){
+'use strict'
+
+module.exports = createFilteredVector
+
+var cubicHermite = require('cubic-hermite')
+var bsearch = require('binary-search-bounds')
+
+function clamp(lo, hi, x) {
+  return Math.min(hi, Math.max(lo, x))
+}
+
+function FilteredVector(state0, velocity0, t0) {
+  this.dimension  = state0.length
+  this.bounds     = [ new Array(this.dimension), new Array(this.dimension) ]
+  for(var i=0; i<this.dimension; ++i) {
+    this.bounds[0][i] = -Infinity
+    this.bounds[1][i] = Infinity
+  }
+  this._state     = state0.slice().reverse()
+  this._velocity  = velocity0.slice().reverse()
+  this._time      = [ t0 ]
+  this._scratch   = [ state0.slice(), state0.slice(), state0.slice(), state0.slice(), state0.slice() ]
+}
+
+var proto = FilteredVector.prototype
+
+proto.flush = function(t) {
+  var idx = bsearch.gt(this._time, t) - 1
+  if(idx <= 0) {
+    return
+  }
+  this._time.splice(0, idx)
+  this._state.splice(0, idx * this.dimension)
+  this._velocity.splice(0, idx * this.dimension)
+}
+
+proto.curve = function(t) {
+  var time      = this._time
+  var n         = time.length
+  var idx       = bsearch.le(time, t)
+  var result    = this._scratch[0]
+  var state     = this._state
+  var velocity  = this._velocity
+  var d         = this.dimension
+  var bounds    = this.bounds
+  if(idx < 0) {
+    var ptr = d-1
+    for(var i=0; i<d; ++i, --ptr) {
+      result[i] = state[ptr]
+    }
+  } else if(idx >= n-1) {
+    var ptr = state.length-1
+    var tf = t - time[n-1]
+    for(var i=0; i<d; ++i, --ptr) {
+      result[i] = state[ptr] + tf * velocity[ptr]
+    }
+  } else {
+    var ptr = d * (idx+1) - 1
+    var t0  = time[idx]
+    var t1  = time[idx+1]
+    var dt  = (t1 - t0) || 1.0
+    var x0  = this._scratch[1]
+    var x1  = this._scratch[2]
+    var v0  = this._scratch[3]
+    var v1  = this._scratch[4]
+    var steady = true
+    for(var i=0; i<d; ++i, --ptr) {
+      x0[i] = state[ptr]
+      v0[i] = velocity[ptr] * dt
+      x1[i] = state[ptr+d]
+      v1[i] = velocity[ptr+d] * dt
+      steady = steady && (x0[i] === x1[i] && v0[i] === v1[i] && v0[i] === 0.0)
+    }
+    if(steady) {
+      for(var i=0; i<d; ++i) {
+        result[i] = x0[i]
+      }
+    } else {
+      cubicHermite(x0, v0, x1, v1, (t-t0)/dt, result)
+    }
+  }
+  var lo = bounds[0]
+  var hi = bounds[1]
+  for(var i=0; i<d; ++i) {
+    result[i] = clamp(lo[i], hi[i], result[i])
+  }
+  return result
+}
+
+proto.dcurve = function(t) {
+  var time     = this._time
+  var n        = time.length
+  var idx      = bsearch.le(time, t)
+  var result   = this._scratch[0]
+  var state    = this._state
+  var velocity = this._velocity
+  var d        = this.dimension
+  if(idx >= n-1) {
+    var ptr = state.length-1
+    var tf = t - time[n-1]
+    for(var i=0; i<d; ++i, --ptr) {
+      result[i] = velocity[ptr]
+    }
+  } else {
+    var ptr = d * (idx+1) - 1
+    var t0 = time[idx]
+    var t1 = time[idx+1]
+    var dt = (t1 - t0) || 1.0
+    var x0 = this._scratch[1]
+    var x1 = this._scratch[2]
+    var v0 = this._scratch[3]
+    var v1 = this._scratch[4]
+    var steady = true
+    for(var i=0; i<d; ++i, --ptr) {
+      x0[i] = state[ptr]
+      v0[i] = velocity[ptr] * dt
+      x1[i] = state[ptr+d]
+      v1[i] = velocity[ptr+d] * dt
+      steady = steady && (x0[i] === x1[i] && v0[i] === v1[i] && v0[i] === 0.0)
+    }
+    if(steady) {
+      for(var i=0; i<d; ++i) {
+        result[i] = 0.0
+      }
+    } else {
+      cubicHermite.derivative(x0, v0, x1, v1, (t-t0)/dt, result)
+      for(var i=0; i<d; ++i) {
+        result[i] /= dt
+      }
+    }
+  }
+  return result
+}
+
+proto.lastT = function() {
+  var time = this._time
+  return time[time.length-1]
+}
+
+proto.stable = function() {
+  var velocity = this._velocity
+  var ptr = velocity.length
+  for(var i=this.dimension-1; i>=0; --i) {
+    if(velocity[--ptr]) {
+      return false
+    }
+  }
+  return true
+}
+
+proto.jump = function(t) {
+  var t0 = this.lastT()
+  var d  = this.dimension
+  if(t < t0 || arguments.length !== d+1) {
+    return
+  }
+  var state     = this._state
+  var velocity  = this._velocity
+  var ptr       = state.length-this.dimension
+  var bounds    = this.bounds
+  var lo        = bounds[0]
+  var hi        = bounds[1]
+  this._time.push(t0, t)
+  for(var j=0; j<2; ++j) {
+    for(var i=0; i<d; ++i) {
+      state.push(state[ptr++])
+      velocity.push(0)
+    }
+  }
+  this._time.push(t)
+  for(var i=d; i>0; --i) {
+    state.push(clamp(lo[i-1], hi[i-1], arguments[i]))
+    velocity.push(0)
+  }
+}
+
+proto.push = function(t) {
+  var t0 = this.lastT()
+  var d  = this.dimension
+  if(t < t0 || arguments.length !== d+1) {
+    return
+  }
+  var state     = this._state
+  var velocity  = this._velocity
+  var ptr       = state.length-this.dimension
+  var dt        = t - t0
+  var bounds    = this.bounds
+  var lo        = bounds[0]
+  var hi        = bounds[1]
+  var sf        = (dt > 1e-6) ? 1/dt : 0
+  this._time.push(t)
+  for(var i=d; i>0; --i) {
+    var xc = clamp(lo[i-1], hi[i-1], arguments[i])
+    state.push(xc)
+    velocity.push((xc - state[ptr++]) * sf)
+  }
+}
+
+proto.set = function(t) {
+  var d = this.dimension
+  if(t < this.lastT() || arguments.length !== d+1) {
+    return
+  }
+  var state     = this._state
+  var velocity  = this._velocity
+  var bounds    = this.bounds
+  var lo        = bounds[0]
+  var hi        = bounds[1]
+  this._time.push(t)
+  for(var i=d; i>0; --i) {
+    state.push(clamp(lo[i-1], hi[i-1], arguments[i]))
+    velocity.push(0)
+  }
+}
+
+proto.move = function(t) {
+  var t0 = this.lastT()
+  var d  = this.dimension
+  if(t <= t0 || arguments.length !== d+1) {
+    return
+  }
+  var state    = this._state
+  var velocity = this._velocity
+  var statePtr = state.length - this.dimension
+  var bounds   = this.bounds
+  var lo       = bounds[0]
+  var hi       = bounds[1]
+  var dt       = t - t0
+  var sf       = (dt > 1e-6) ? 1/dt : 0.0
+  this._time.push(t)
+  for(var i=d; i>0; --i) {
+    var dx = arguments[i]
+    state.push(clamp(lo[i-1], hi[i-1], state[statePtr++] + dx))
+    velocity.push(dx * sf)
+  }
+}
+
+proto.idle = function(t) {
+  var t0 = this.lastT()
+  if(t < t0) {
+    return
+  }
+  var d        = this.dimension
+  var state    = this._state
+  var velocity = this._velocity
+  var statePtr = state.length-d
+  var bounds   = this.bounds
+  var lo       = bounds[0]
+  var hi       = bounds[1]
+  var dt       = t - t0
+  this._time.push(t)
+  for(var i=d-1; i>=0; --i) {
+    state.push(clamp(lo[i], hi[i], state[statePtr] + dt * velocity[statePtr]))
+    velocity.push(0)
+    statePtr += 1
+  }
+}
+
+function getZero(d) {
+  var result = new Array(d)
+  for(var i=0; i<d; ++i) {
+    result[i] = 0.0
+  }
+  return result
+}
+
+function createFilteredVector(initState, initVelocity, initTime) {
+  switch(arguments.length) {
+    case 0:
+      return new FilteredVector([0], [0], 0)
+    case 1:
+      if(typeof initState === 'number') {
+        var zero = getZero(initState)
+        return new FilteredVector(zero, zero, 0)
+      } else {
+        return new FilteredVector(initState, getZero(initState.length), 0)
+      }
+    case 2:
+      if(typeof initVelocity === 'number') {
+        var zero = getZero(initState.length)
+        return new FilteredVector(initState, zero, +initVelocity)
+      } else {
+        initTime = 0
+      }
+    case 3:
+      if(initState.length !== initVelocity.length) {
+        throw new Error('state and velocity lengths must match')
+      }
+      return new FilteredVector(initState, initVelocity, initTime)
+  }
+}
+
+},{"binary-search-bounds":19,"cubic-hermite":20}],19:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],20:[function(require,module,exports){
+"use strict"
+
+function dcubicHermite(p0, v0, p1, v1, t, f) {
+  var dh00 = 6*t*t-6*t,
+      dh10 = 3*t*t-4*t + 1,
+      dh01 = -6*t*t+6*t,
+      dh11 = 3*t*t-2*t
+  if(p0.length) {
+    if(!f) {
+      f = new Array(p0.length)
+    }
+    for(var i=p0.length-1; i>=0; --i) {
+      f[i] = dh00*p0[i] + dh10*v0[i] + dh01*p1[i] + dh11*v1[i]
+    }
+    return f
+  }
+  return dh00*p0 + dh10*v0 + dh01*p1[i] + dh11*v1
+}
+
+function cubicHermite(p0, v0, p1, v1, t, f) {
+  var ti  = (t-1), t2 = t*t, ti2 = ti*ti,
+      h00 = (1+2*t)*ti2,
+      h10 = t*ti2,
+      h01 = t2*(3-2*t),
+      h11 = t2*ti
+  if(p0.length) {
+    if(!f) {
+      f = new Array(p0.length)
+    }
+    for(var i=p0.length-1; i>=0; --i) {
+      f[i] = h00*p0[i] + h10*v0[i] + h01*p1[i] + h11*v1[i]
+    }
+    return f
+  }
+  return h00*p0 + h10*v0 + h01*p1 + h11*v1
+}
+
+module.exports = cubicHermite
+module.exports.derivative = dcubicHermite
+},{}],21:[function(require,module,exports){
+'use strict'
+
+module.exports = createOrbitController
+
+var filterVector  = require('filtered-vector')
+var lookAt        = require('gl-mat4/lookAt')
+var mat4FromQuat  = require('gl-mat4/fromQuat')
+var invert44      = require('gl-mat4/invert')
+var quatFromFrame = require('./lib/quatFromFrame')
+
+function len3(x,y,z) {
+  return Math.sqrt(Math.pow(x,2) + Math.pow(y,2) + Math.pow(z,2))
+}
+
+function len4(w,x,y,z) {
+  return Math.sqrt(Math.pow(w,2) + Math.pow(x,2) + Math.pow(y,2) + Math.pow(z,2))
+}
+
+function normalize4(out, a) {
+  var ax = a[0]
+  var ay = a[1]
+  var az = a[2]
+  var aw = a[3]
+  var al = len4(ax, ay, az, aw)
+  if(al > 1e-6) {
+    out[0] = ax/al
+    out[1] = ay/al
+    out[2] = az/al
+    out[3] = aw/al
+  } else {
+    out[0] = out[1] = out[2] = 0.0
+    out[3] = 1.0
+  }
+}
+
+function OrbitCameraController(initQuat, initCenter, initRadius) {
+  this.radius    = filterVector([initRadius])
+  this.center    = filterVector(initCenter)
+  this.rotation  = filterVector(initQuat)
+
+  this.computedRadius   = this.radius.curve(0)
+  this.computedCenter   = this.center.curve(0)
+  this.computedRotation = this.rotation.curve(0)
+  this.computedUp       = [0.1,0,0]
+  this.computedEye      = [0.1,0,0]
+  this.computedMatrix   = [0.1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+
+  this.recalcMatrix(0)
+}
+
+var proto = OrbitCameraController.prototype
+
+proto.lastT = function() {
+  return Math.max(
+    this.radius.lastT(),
+    this.center.lastT(),
+    this.rotation.lastT())
+}
+
+proto.recalcMatrix = function(t) {
+  this.radius.curve(t)
+  this.center.curve(t)
+  this.rotation.curve(t)
+
+  var quat = this.computedRotation
+  normalize4(quat, quat)
+
+  var mat = this.computedMatrix
+  mat4FromQuat(mat, quat)
+
+  var center = this.computedCenter
+  var eye    = this.computedEye
+  var up     = this.computedUp
+  var radius = Math.exp(this.computedRadius[0])
+
+  eye[0] = center[0] + radius * mat[2]
+  eye[1] = center[1] + radius * mat[6]
+  eye[2] = center[2] + radius * mat[10]
+  up[0] = mat[1]
+  up[1] = mat[5]
+  up[2] = mat[9]
+
+  for(var i=0; i<3; ++i) {
+    var rr = 0.0
+    for(var j=0; j<3; ++j) {
+      rr += mat[i+4*j] * eye[j]
+    }
+    mat[12+i] = -rr
+  }
+}
+
+proto.getMatrix = function(t, result) {
+  this.recalcMatrix(t)
+  var m = this.computedMatrix
+  if(result) {
+    for(var i=0; i<16; ++i) {
+      result[i] = m[i]
+    }
+    return result
+  }
+  return m
+}
+
+proto.idle = function(t) {
+  this.center.idle(t)
+  this.radius.idle(t)
+  this.rotation.idle(t)
+}
+
+proto.flush = function(t) {
+  this.center.flush(t)
+  this.radius.flush(t)
+  this.rotation.flush(t)
+}
+
+proto.pan = function(t, dx, dy, dz) {
+  dx = dx || 0.0
+  dy = dy || 0.0
+  dz = dz || 0.0
+
+  this.recalcMatrix(t)
+  var mat = this.computedMatrix
+
+  var ux = mat[1]
+  var uy = mat[5]
+  var uz = mat[9]
+  var ul = len3(ux, uy, uz)
+  ux /= ul
+  uy /= ul
+  uz /= ul
+
+  var rx = mat[0]
+  var ry = mat[4]
+  var rz = mat[8]
+  var ru = rx * ux + ry * uy + rz * uz
+  rx -= ux * ru
+  ry -= uy * ru
+  rz -= uz * ru
+  var rl = len3(rx, ry, rz)
+  rx /= rl
+  ry /= rl
+  rz /= rl
+
+  var fx = mat[2]
+  var fy = mat[6]
+  var fz = mat[10]
+  var fu = fx * ux + fy * uy + fz * uz
+  var fr = fx * rx + fy * ry + fz * rz
+  fx -= fu * ux + fr * rx
+  fy -= fu * uy + fr * ry
+  fz -= fu * uz + fr * rz
+  var fl = len3(fx, fy, fz)
+  fx /= fl
+  fy /= fl
+  fz /= fl
+
+  var vx = rx * dx + ux * dy
+  var vy = ry * dx + uy * dy
+  var vz = rz * dx + uz * dy
+
+  this.center.move(t, vx, vy, vz)
+
+  //Update z-component of radius
+  var radius = Math.exp(this.computedRadius[0])
+  radius = Math.max(1e-4, radius + dz)
+  this.radius.set(t, Math.log(radius))
+}
+
+proto.rotate = function(t, dx, dy, dz) {
+  this.recalcMatrix(t)
+
+  dx = dx||0.0
+  dy = dy||0.0
+
+  var mat = this.computedMatrix
+
+  var rx = mat[0]
+  var ry = mat[4]
+  var rz = mat[8]
+
+  var ux = mat[1]
+  var uy = mat[5]
+  var uz = mat[9]
+
+  var fx = mat[2]
+  var fy = mat[6]
+  var fz = mat[10]
+
+  var qx = dx * rx + dy * ux
+  var qy = dx * ry + dy * uy
+  var qz = dx * rz + dy * uz
+
+  var bx = -(fy * qz - fz * qy)
+  var by = -(fz * qx - fx * qz)
+  var bz = -(fx * qy - fy * qx)  
+  var bw = Math.sqrt(Math.max(0.0, 1.0 - Math.pow(bx,2) - Math.pow(by,2) - Math.pow(bz,2)))
+  var bl = len4(bx, by, bz, bw)
+  if(bl > 1e-6) {
+    bx /= bl
+    by /= bl
+    bz /= bl
+    bw /= bl
+  } else {
+    bx = by = bz = 0.0
+    bw = 1.0
+  }
+
+  var rotation = this.computedRotation
+  var ax = rotation[0]
+  var ay = rotation[1]
+  var az = rotation[2]
+  var aw = rotation[3]
+
+  var cx = ax*bw + aw*bx + ay*bz - az*by
+  var cy = ay*bw + aw*by + az*bx - ax*bz
+  var cz = az*bw + aw*bz + ax*by - ay*bx
+  var cw = aw*bw - ax*bx - ay*by - az*bz
+  
+  //Apply roll
+  if(dz) {
+    bx = fx
+    by = fy
+    bz = fz
+    var s = Math.sin(dz) / len3(bx, by, bz)
+    bx *= s
+    by *= s
+    bz *= s
+    bw = Math.cos(dx)
+    cx = cx*bw + cw*bx + cy*bz - cz*by
+    cy = cy*bw + cw*by + cz*bx - cx*bz
+    cz = cz*bw + cw*bz + cx*by - cy*bx
+    cw = cw*bw - cx*bx - cy*by - cz*bz
+  }
+
+  var cl = len4(cx, cy, cz, cw)
+  if(cl > 1e-6) {
+    cx /= cl
+    cy /= cl
+    cz /= cl
+    cw /= cl
+  } else {
+    cx = cy = cz = 0.0
+    cw = 1.0
+  }
+
+  this.rotation.set(t, cx, cy, cz, cw)
+}
+
+proto.lookAt = function(t, eye, center, up) {
+  this.recalcMatrix(t)
+
+  center = center || this.computedCenter
+  eye    = eye    || this.computedEye
+  up     = up     || this.computedUp
+
+  var mat = this.computedMatrix
+  lookAt(mat, eye, center, up)
+
+  var rotation = this.computedRotation
+  quatFromFrame(rotation,
+    mat[0], mat[1], mat[2],
+    mat[4], mat[5], mat[6],
+    mat[8], mat[9], mat[10])
+  normalize4(rotation, rotation)
+  this.rotation.set(t, rotation[0], rotation[1], rotation[2], rotation[3])
+
+  var fl = 0.0
+  for(var i=0; i<3; ++i) {
+    fl += Math.pow(center[i] - eye[i], 2)
+  }
+  this.radius.set(t, 0.5 * Math.log(Math.max(fl, 1e-6)))
+
+  this.center.set(t, center[0], center[1], center[2])
+}
+
+proto.translate = function(t, dx, dy, dz) {
+  this.center.move(t,
+    dx||0.0,
+    dy||0.0,
+    dz||0.0)
+}
+
+proto.setMatrix = function(t, matrix) {
+
+  var rotation = this.computedRotation
+  quatFromFrame(rotation,
+    matrix[0], matrix[1], matrix[2],
+    matrix[4], matrix[5], matrix[6],
+    matrix[8], matrix[9], matrix[10])
+  normalize4(rotation, rotation)
+  this.rotation.set(t, rotation[0], rotation[1], rotation[2], rotation[3])
+
+  var mat = this.computedMatrix
+  invert44(mat, matrix)
+  var w = mat[15]
+  if(Math.abs(w) > 1e-6) {
+    var cx = mat[12]/w
+    var cy = mat[13]/w
+    var cz = mat[14]/w
+
+    this.recalcMatrix(t)  
+    var r = Math.exp(this.computedRadius[0])
+    this.center.set(t, cx-mat[2]*r, cy-mat[6]*r, cz-mat[10]*r)
+    this.radius.idle(t)
+  } else {
+    this.center.idle(t)
+    this.radius.idle(t)
+  }
+}
+
+proto.setDistance = function(t, d) {
+  if(d > 0) {
+    this.radius.set(t, Math.log(d))
+  }
+}
+
+proto.setDistanceLimits = function(lo, hi) {
+  if(lo > 0) {
+    lo = Math.log(lo)
+  } else {
+    lo = -Infinity    
+  }
+  if(hi > 0) {
+    hi = Math.log(hi)
+  } else {
+    hi = Infinity
+  }
+  hi = Math.max(hi, lo)
+  this.radius.bounds[0][0] = lo
+  this.radius.bounds[1][0] = hi
+}
+
+proto.getDistanceLimits = function(out) {
+  var bounds = this.radius.bounds
+  if(out) {
+    out[0] = Math.exp(bounds[0][0])
+    out[1] = Math.exp(bounds[1][0])
+    return out
+  }
+  return [ Math.exp(bounds[0][0]), Math.exp(bounds[1][0]) ]
+}
+
+proto.toJSON = function() {
+  this.recalcMatrix(this.lastT())
+  return {
+    center:   this.computedCenter.slice(),
+    rotation: this.computedRotation.slice(),
+    distance: Math.log(this.computedRadius[0]),
+    zoomMin:  this.radius.bounds[0][0],
+    zoomMax:  this.radius.bounds[1][0]
+  }
+}
+
+proto.fromJSON = function(options) {
+  var t = this.lastT()
+  var c = options.center
+  if(c) {
+    this.center.set(t, c[0], c[1], c[2])
+  }
+  var r = options.rotation
+  if(r) {
+    this.rotation.set(t, r[0], r[1], r[2], r[3])
+  }
+  var d = options.distance
+  if(d && d > 0) {
+    this.radius.set(t, Math.log(d))
+  }
+  this.setDistanceLimits(options.zoomMin, options.zoomMax)
+}
+
+function createOrbitController(options) {
+  options = options || {}
+  var center   = options.center   || [0,0,0]
+  var rotation = options.rotation || [0,0,0,1]
+  var radius   = options.radius   || 1.0
+
+  center = [].slice.call(center, 0, 3)
+  rotation = [].slice.call(rotation, 0, 4)
+  normalize4(rotation, rotation)
+
+  var result = new OrbitCameraController(
+    rotation,
+    center,
+    Math.log(radius))
+
+  result.setDistanceLimits(options.zoomMin, options.zoomMax)
+
+  if('eye' in options || 'up' in options) {
+    result.lookAt(0, options.eye, options.center, options.up)
+  }
+
+  return result
+}
+},{"./lib/quatFromFrame":17,"filtered-vector":18,"gl-mat4/fromQuat":35,"gl-mat4/invert":40,"gl-mat4/lookAt":41}],22:[function(require,module,exports){
+arguments[4][18][0].apply(exports,arguments)
+},{"binary-search-bounds":23,"cubic-hermite":24,"dup":18}],23:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],24:[function(require,module,exports){
+arguments[4][20][0].apply(exports,arguments)
+},{"dup":20}],25:[function(require,module,exports){
+arguments[4][6][0].apply(exports,arguments)
+},{"dup":6}],26:[function(require,module,exports){
+arguments[4][7][0].apply(exports,arguments)
+},{"dup":7}],27:[function(require,module,exports){
+arguments[4][10][0].apply(exports,arguments)
+},{"dup":10}],28:[function(require,module,exports){
+'use strict'
+
+module.exports = createTurntableController
+
+var filterVector = require('filtered-vector')
+var invert44     = require('gl-mat4/invert')
+var rotateM      = require('gl-mat4/rotate')
+var cross        = require('gl-vec3/cross')
+var normalize3   = require('gl-vec3/normalize')
+var dot3         = require('gl-vec3/dot')
+
+function len3(x, y, z) {
+  return Math.sqrt(Math.pow(x, 2) + Math.pow(y, 2) + Math.pow(z, 2))
+}
+
+function clamp1(x) {
+  return Math.min(1.0, Math.max(-1.0, x))
+}
+
+function findOrthoPair(v) {
+  var vx = Math.abs(v[0])
+  var vy = Math.abs(v[1])
+  var vz = Math.abs(v[2])
+
+  var u = [0,0,0]
+  if(vx > Math.max(vy, vz)) {
+    u[2] = 1
+  } else if(vy > Math.max(vx, vz)) {
+    u[0] = 1
+  } else {
+    u[1] = 1
+  }
+
+  var vv = 0
+  var uv = 0
+  for(var i=0; i<3; ++i ) {
+    vv += v[i] * v[i]
+    uv += u[i] * v[i]
+  }
+  for(var i=0; i<3; ++i) {
+    u[i] -= (uv / vv) *  v[i]
+  }
+  normalize3(u, u)
+  return u
+}
+
+function TurntableController(zoomMin, zoomMax, center, up, right, radius, theta, phi) {
+  this.center = filterVector(center)
+  this.up     = filterVector(up)
+  this.right  = filterVector(right)
+  this.radius = filterVector([radius])
+  this.angle  = filterVector([theta, phi])
+  this.angle.bounds = [[-Infinity,-Math.PI/2], [Infinity,Math.PI/2]]
+  this.setDistanceLimits(zoomMin, zoomMax)
+
+  this.computedCenter = this.center.curve(0)
+  this.computedUp     = this.up.curve(0)
+  this.computedRight  = this.right.curve(0)
+  this.computedRadius = this.radius.curve(0)
+  this.computedAngle  = this.angle.curve(0)
+  this.computedToward = [0,0,0]
+  this.computedEye    = [0,0,0]
+  this.computedMatrix = new Array(16)
+  for(var i=0; i<16; ++i) {
+    this.computedMatrix[i] = 0.5
+  }
+
+  this.recalcMatrix(0)
+}
+
+var proto = TurntableController.prototype
+
+proto.setDistanceLimits = function(minDist, maxDist) {
+  if(minDist > 0) {
+    minDist = Math.log(minDist)
+  } else {
+    minDist = -Infinity
+  }
+  if(maxDist > 0) {
+    maxDist = Math.log(maxDist)
+  } else {
+    maxDist = Infinity
+  }
+  maxDist = Math.max(maxDist, minDist)
+  this.radius.bounds[0][0] = minDist
+  this.radius.bounds[1][0] = maxDist
+}
+
+proto.getDistanceLimits = function(out) {
+  var bounds = this.radius.bounds[0]
+  if(out) {
+    out[0] = Math.exp(bounds[0][0])
+    out[1] = Math.exp(bounds[1][0])
+    return out
+  }
+  return [ Math.exp(bounds[0][0]), Math.exp(bounds[1][0]) ]
+}
+
+proto.recalcMatrix = function(t) {
+  //Recompute curves
+  this.center.curve(t)
+  this.up.curve(t)
+  this.right.curve(t)
+  this.radius.curve(t)
+  this.angle.curve(t)
+
+  //Compute frame for camera matrix
+  var up     = this.computedUp
+  var right  = this.computedRight
+  var uu = 0.0
+  var ur = 0.0
+  for(var i=0; i<3; ++i) {
+    ur += up[i] * right[i]
+    uu += up[i] * up[i]
+  }
+  var ul = Math.sqrt(uu)
+  var rr = 0.0
+  for(var i=0; i<3; ++i) {
+    right[i] -= up[i] * ur / uu
+    rr       += right[i] * right[i]
+    up[i]    /= ul
+  }
+  var rl = Math.sqrt(rr)
+  for(var i=0; i<3; ++i) {
+    right[i] /= rl
+  }
+
+  //Compute toward vector
+  var toward = this.computedToward
+  cross(toward, up, right)
+  normalize3(toward, toward)
+
+  //Compute angular parameters
+  var radius = Math.exp(this.computedRadius[0])
+  var theta  = this.computedAngle[0]
+  var phi    = this.computedAngle[1]
+
+  var ctheta = Math.cos(theta)
+  var stheta = Math.sin(theta)
+  var cphi   = Math.cos(phi)
+  var sphi   = Math.sin(phi)
+
+  var center = this.computedCenter
+
+  var wx = ctheta * cphi 
+  var wy = stheta * cphi
+  var wz = sphi
+
+  var sx = -ctheta * sphi
+  var sy = -stheta * sphi
+  var sz = cphi
+
+  var eye = this.computedEye
+  var mat = this.computedMatrix
+  for(var i=0; i<3; ++i) {
+    var x      = wx * right[i] + wy * toward[i] + wz * up[i]
+    mat[4*i+1] = sx * right[i] + sy * toward[i] + sz * up[i]
+    mat[4*i+2] = x
+    mat[4*i+3] = 0.0
+  }
+
+  var ax = mat[1]
+  var ay = mat[5]
+  var az = mat[9]
+  var bx = mat[2]
+  var by = mat[6]
+  var bz = mat[10]
+  var cx = ay * bz - az * by
+  var cy = az * bx - ax * bz
+  var cz = ax * by - ay * bx
+  var cl = len3(cx, cy, cz)
+  cx /= cl
+  cy /= cl
+  cz /= cl
+  mat[0] = cx
+  mat[4] = cy
+  mat[8] = cz
+
+  for(var i=0; i<3; ++i) {
+    eye[i] = center[i] + mat[2+4*i]*radius
+  }
+
+  for(var i=0; i<3; ++i) {
+    var rr = 0.0
+    for(var j=0; j<3; ++j) {
+      rr += mat[i+4*j] * eye[j]
+    }
+    mat[12+i] = -rr
+  }
+  mat[15] = 1.0
+}
+
+proto.getMatrix = function(t, result) {
+  this.recalcMatrix(t)
+  var mat = this.computedMatrix
+  if(result) {
+    for(var i=0; i<16; ++i) {
+      result[i] = mat[i]
+    }
+    return result
+  }
+  return mat
+}
+
+var zAxis = [0,0,0]
+proto.rotate = function(t, dtheta, dphi, droll) {
+  this.angle.move(t, dtheta, dphi)
+  if(droll) {
+    this.recalcMatrix(t)
+
+    var mat = this.computedMatrix
+    zAxis[0] = mat[2]
+    zAxis[1] = mat[6]
+    zAxis[2] = mat[10]
+
+    var up     = this.computedUp
+    var right  = this.computedRight
+    var toward = this.computedToward
+
+    for(var i=0; i<3; ++i) {
+      mat[4*i]   = up[i]
+      mat[4*i+1] = right[i]
+      mat[4*i+2] = toward[i]
+    }
+    rotateM(mat, mat, droll, zAxis)
+    for(var i=0; i<3; ++i) {
+      up[i] =    mat[4*i]
+      right[i] = mat[4*i+1]
+    }
+
+    this.up.set(t, up[0], up[1], up[2])
+    this.right.set(t, right[0], right[1], right[2])
+  }
+}
+
+proto.pan = function(t, dx, dy, dz) {
+  dx = dx || 0.0
+  dy = dy || 0.0
+  dz = dz || 0.0
+
+  this.recalcMatrix(t)
+  var mat = this.computedMatrix
+
+  var dist = Math.exp(this.computedRadius[0])
+
+  var ux = mat[1]
+  var uy = mat[5]
+  var uz = mat[9]
+  var ul = len3(ux, uy, uz)
+  ux /= ul
+  uy /= ul
+  uz /= ul
+
+  var rx = mat[0]
+  var ry = mat[4]
+  var rz = mat[8]
+  var ru = rx * ux + ry * uy + rz * uz
+  rx -= ux * ru
+  ry -= uy * ru
+  rz -= uz * ru
+  var rl = len3(rx, ry, rz)
+  rx /= rl
+  ry /= rl
+  rz /= rl
+
+  var vx = rx * dx + ux * dy
+  var vy = ry * dx + uy * dy
+  var vz = rz * dx + uz * dy
+  this.center.move(t, vx, vy, vz)
+
+  //Update z-component of radius
+  var radius = Math.exp(this.computedRadius[0])
+  radius = Math.max(1e-4, radius + dz)
+  this.radius.set(t, Math.log(radius))
+}
+
+proto.translate = function(t, dx, dy, dz) {
+  this.center.move(t,
+    dx||0.0,
+    dy||0.0,
+    dz||0.0)
+}
+
+//Recenters the coordinate axes
+proto.setMatrix = function(t, mat, axes, noSnap) {
+  
+  //Get the axes for tare
+  var ushift = 1
+  if(typeof axes === 'number') {
+    ushift = (axes)|0
+  } 
+  if(ushift < 0 || ushift > 3) {
+    ushift = 1
+  }
+  var vshift = (ushift + 2) % 3
+  var fshift = (ushift + 1) % 3
+
+  //Recompute state for new t value
+  if(!mat) { 
+    this.recalcMatrix(t)
+    mat = this.computedMatrix
+  }
+
+  //Get right and up vectors
+  var ux = mat[ushift]
+  var uy = mat[ushift+4]
+  var uz = mat[ushift+8]
+  if(!noSnap) {
+    var ul = len3(ux, uy, uz)
+    ux /= ul
+    uy /= ul
+    uz /= ul
+  } else {
+    var ax = Math.abs(ux)
+    var ay = Math.abs(uy)
+    var az = Math.abs(uz)
+    var am = Math.max(ax,ay,az)
+    if(ax === am) {
+      ux = (ux < 0) ? -1 : 1
+      uy = uz = 0
+    } else if(az === am) {
+      uz = (uz < 0) ? -1 : 1
+      ux = uy = 0
+    } else {
+      uy = (uy < 0) ? -1 : 1
+      ux = uz = 0
+    }
+  }
+
+  var rx = mat[vshift]
+  var ry = mat[vshift+4]
+  var rz = mat[vshift+8]
+  var ru = rx * ux + ry * uy + rz * uz
+  rx -= ux * ru
+  ry -= uy * ru
+  rz -= uz * ru
+  var rl = len3(rx, ry, rz)
+  rx /= rl
+  ry /= rl
+  rz /= rl
+  
+  var fx = uy * rz - uz * ry
+  var fy = uz * rx - ux * rz
+  var fz = ux * ry - uy * rx
+  var fl = len3(fx, fy, fz)
+  fx /= fl
+  fy /= fl
+  fz /= fl
+
+  this.center.jump(t, ex, ey, ez)
+  this.radius.idle(t)
+  this.up.jump(t, ux, uy, uz)
+  this.right.jump(t, rx, ry, rz)
+
+  var phi, theta
+  if(ushift === 2) {
+    var cx = mat[1]
+    var cy = mat[5]
+    var cz = mat[9]
+    var cr = cx * rx + cy * ry + cz * rz
+    var cf = cx * fx + cy * fy + cz * fz
+    if(tu < 0) {
+      phi = -Math.PI/2
+    } else {
+      phi = Math.PI/2
+    }
+    theta = Math.atan2(cf, cr)
+  } else {
+    var tx = mat[2]
+    var ty = mat[6]
+    var tz = mat[10]
+    var tu = tx * ux + ty * uy + tz * uz
+    var tr = tx * rx + ty * ry + tz * rz
+    var tf = tx * fx + ty * fy + tz * fz
+
+    phi = Math.asin(clamp1(tu))
+    theta = Math.atan2(tf, tr)
+  }
+
+  this.angle.jump(t, theta, phi)
+
+  this.recalcMatrix(t)
+  var dx = mat[2]
+  var dy = mat[6]
+  var dz = mat[10]
+
+  var imat = this.computedMatrix
+  invert44(imat, mat)
+  var w  = imat[15]
+  var ex = imat[12] / w
+  var ey = imat[13] / w
+  var ez = imat[14] / w
+
+  var gs = Math.exp(this.computedRadius[0])
+  this.center.jump(t, ex-dx*gs, ey-dy*gs, ez-dz*gs)
+}
+
+proto.lastT = function() {
+  return Math.max(
+    this.center.lastT(),
+    this.up.lastT(),
+    this.right.lastT(),
+    this.radius.lastT(),
+    this.angle.lastT())
+}
+
+proto.idle = function(t) {
+  this.center.idle(t)
+  this.up.idle(t)
+  this.right.idle(t)
+  this.radius.idle(t)
+  this.angle.idle(t)
+}
+
+proto.flush = function(t) {
+  this.center.flush(t)
+  this.up.flush(t)
+  this.right.flush(t)
+  this.radius.flush(t)
+  this.angle.flush(t)
+}
+
+proto.setDistance = function(t, d) {
+  if(d > 0) {
+    this.radius.set(t, Math.log(d))
+  }
+}
+
+proto.lookAt = function(t, eye, center, up) {
+  this.recalcMatrix(t)
+
+  eye    = eye    || this.computedEye
+  center = center || this.computedCenter
+  up     = up     || this.computedUp
+
+  var ux = up[0]
+  var uy = up[1]
+  var uz = up[2]
+  var ul = len3(ux, uy, uz)
+  if(ul < 1e-6) {
+    return
+  }
+  ux /= ul
+  uy /= ul
+  uz /= ul
+
+  var tx = eye[0] - center[0]
+  var ty = eye[1] - center[1]
+  var tz = eye[2] - center[2]
+  var tl = len3(tx, ty, tz)
+  if(tl < 1e-6) {
+    return
+  }
+  tx /= tl
+  ty /= tl
+  tz /= tl
+
+  var right = this.computedRight
+  var rx = right[0]
+  var ry = right[1]
+  var rz = right[2]
+  var ru = ux*rx + uy*ry + uz*rz
+  rx -= ru * ux
+  ry -= ru * uy
+  rz -= ru * uz
+  var rl = len3(rx, ry, rz)
+
+  if(rl < 0.01) {
+    rx = uy * tz - uz * ty
+    ry = uz * tx - ux * tz
+    rz = ux * ty - uy * tx
+    rl = len3(rx, ry, rz)
+    if(rl < 1e-6) {
+      return
+    }
+  }
+  rx /= rl
+  ry /= rl
+  rz /= rl
+
+  this.up.set(t, ux, uy, uz)
+  this.right.set(t, rx, ry, rz)
+  this.center.set(t, center[0], center[1], center[2])
+  this.radius.set(t, Math.log(tl))
+
+  var fx = uy * rz - uz * ry
+  var fy = uz * rx - ux * rz
+  var fz = ux * ry - uy * rx
+  var fl = len3(fx, fy, fz)
+  fx /= fl
+  fy /= fl
+  fz /= fl
+
+  var tu = ux*tx + uy*ty + uz*tz
+  var tr = rx*tx + ry*ty + rz*tz
+  var tf = fx*tx + fy*ty + fz*tz
+
+  var phi   = Math.asin(clamp1(tu))
+  var theta = Math.atan2(tf, tr)
+
+  var angleState = this.angle._state
+  var lastTheta  = angleState[angleState.length-1]
+  var lastPhi    = angleState[angleState.length-2]
+  lastTheta      = lastTheta % (2.0 * Math.PI)
+  var dp = Math.abs(lastTheta + 2.0 * Math.PI - theta)
+  var d0 = Math.abs(lastTheta - theta)
+  var dn = Math.abs(lastTheta - 2.0 * Math.PI - theta)
+  if(dp < d0) {
+    lastTheta += 2.0 * Math.PI
+  }
+  if(dn < d0) {
+    lastTheta -= 2.0 * Math.PI
+  }
+
+  this.angle.jump(this.angle.lastT(), lastTheta, lastPhi)
+  this.angle.set(t, theta, phi)
+}
+
+function createTurntableController(options) {
+  options = options || {}
+
+  var center = options.center || [0,0,0]
+  var up     = options.up     || [0,1,0]
+  var right  = options.right  || findOrthoPair(up)
+  var radius = options.radius || 1.0
+  var theta  = options.theta  || 0.0
+  var phi    = options.phi    || 0.0
+
+  center = [].slice.call(center, 0, 3)
+
+  up = [].slice.call(up, 0, 3)
+  normalize3(up, up)
+
+  right = [].slice.call(right, 0, 3)
+  normalize3(right, right)
+
+  if('eye' in options) {
+    var eye = options.eye
+    var toward = [
+      eye[0]-center[0],
+      eye[1]-center[1],
+      eye[2]-center[2]
+    ]
+    cross(right, toward, up)
+    if(len3(right[0], right[1], right[2]) < 1e-6) {
+      right = findOrthoPair(up)
+    } else {
+      normalize3(right, right)
+    }
+
+    radius = len3(toward[0], toward[1], toward[2])
+
+    var ut = dot3(up, toward) / radius
+    var rt = dot3(right, toward) / radius
+    phi    = Math.acos(ut)
+    theta  = Math.acos(rt)
+  }
+
+  //Use logarithmic coordinates for radius
+  radius = Math.log(radius)
+
+  //Return the controller
+  return new TurntableController(
+    options.zoomMin,
+    options.zoomMax,
+    center,
+    up,
+    right,
+    radius,
+    theta,
+    phi)
+}
+},{"filtered-vector":22,"gl-mat4/invert":40,"gl-mat4/rotate":46,"gl-vec3/cross":25,"gl-vec3/dot":26,"gl-vec3/normalize":27}],29:[function(require,module,exports){
+'use strict'
+
+module.exports = createViewController
+
+var createTurntable = require('turntable-camera-controller')
+var createOrbit     = require('orbit-camera-controller')
+var createMatrix    = require('matrix-camera-controller')
+
+function ViewController(controllers, mode) {
+  this._controllerNames = Object.keys(controllers)
+  this._controllerList = this._controllerNames.map(function(n) {
+    return controllers[n]
+  })
+  this._mode   = mode
+  this._active = controllers[mode]
+  if(!this._active) {
+    this._mode   = 'turntable'
+    this._active = controllers.turntable
+  }
+  this.modes = this._controllerNames
+  this.computedMatrix = this._active.computedMatrix
+  this.computedEye    = this._active.computedEye
+  this.computedUp     = this._active.computedUp
+  this.computedCenter = this._active.computedCenter
+  this.computedRadius = this._active.computedRadius
+}
+
+var proto = ViewController.prototype
+
+var COMMON_METHODS = [
+  ['flush', 1],
+  ['idle', 1],
+  ['lookAt', 4],
+  ['rotate', 4],
+  ['pan', 4],
+  ['translate', 4],
+  ['setMatrix', 2],
+  ['setDistanceLimits', 2],
+  ['setDistance', 2]
+]
+
+COMMON_METHODS.forEach(function(method) {
+  var name = method[0]
+  var argNames = []
+  for(var i=0; i<method[1]; ++i) {
+    argNames.push('a'+i)
+  }
+  var code = 'var cc=this._controllerList;for(var i=0;i<cc.length;++i){cc[i].'+method[0]+'('+argNames.join()+')}'
+  proto[name] = Function.apply(null, argNames.concat(code))
+})
+
+proto.recalcMatrix = function(t) {
+  this._active.recalcMatrix(t)
+}
+
+proto.getDistance = function(t) {
+  return this._active.getDistance(t)
+}
+proto.getDistanceLimits = function(out) {
+  return this._active.getDistanceLimits(out)
+}
+
+proto.lastT = function() {
+  return this._active.lastT()
+}
+
+proto.setMode = function(mode) {
+  if(mode === this._mode) {
+    return
+  }
+  var idx = this._controllerNames.indexOf(mode)
+  if(idx < 0) {
+    return
+  }
+  var prev  = this._active
+  var next  = this._controllerList[idx]
+  var lastT = Math.max(prev.lastT(), next.lastT())
+
+  prev.recalcMatrix(lastT)
+  next.setMatrix(lastT, prev.computedMatrix)
+  
+  this._active = next
+  this._mode   = mode
+
+  //Update matrix properties
+  this.computedMatrix = this._active.computedMatrix
+  this.computedEye    = this._active.computedEye
+  this.computedUp     = this._active.computedUp
+  this.computedCenter = this._active.computedCenter
+  this.computedRadius = this._active.computedRadius
+}
+
+proto.getMode = function() {
+  return this._mode
+}
+
+function createViewController(options) {
+  options = options || {}
+
+  var eye       = options.eye    || [0,0,1]
+  var center    = options.center || [0,0,0]
+  var up        = options.up     || [0,1,0]
+  var limits    = options.distanceLimits || [0, Infinity]
+  var mode      = options.mode   || 'turntable'
+
+  var turntable = createTurntable()
+  var orbit     = createOrbit()
+  var matrix    = createMatrix()
+
+  turntable.setDistanceLimits(limits[0], limits[1])
+  turntable.lookAt(0, eye, center, up)
+  orbit.setDistanceLimits(limits[0], limits[1])
+  orbit.lookAt(0, eye, center, up)
+  matrix.setDistanceLimits(limits[0], limits[1])
+  matrix.lookAt(0, eye, center, up)
+
+  return new ViewController({
+    turntable: turntable,
+    orbit: orbit,
+    matrix: matrix
+  }, mode)
+}
+},{"matrix-camera-controller":4,"orbit-camera-controller":21,"turntable-camera-controller":28}],30:[function(require,module,exports){
+module.exports = adjoint;
+
+/**
+ * Calculates the adjugate of a mat4
+ *
+ * @param {mat4} out the receiving matrix
+ * @param {mat4} a the source matrix
+ * @returns {mat4} out
+ */
+function adjoint(out, a) {
+    var a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3],
+        a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7],
+        a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11],
+        a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
+
+    out[0]  =  (a11 * (a22 * a33 - a23 * a32) - a21 * (a12 * a33 - a13 * a32) + a31 * (a12 * a23 - a13 * a22));
+    out[1]  = -(a01 * (a22 * a33 - a23 * a32) - a21 * (a02 * a33 - a03 * a32) + a31 * (a02 * a23 - a03 * a22));
+    out[2]  =  (a01 * (a12 * a33 - a13 * a32) - a11 * (a02 * a33 - a03 * a32) + a31 * (a02 * a13 - a03 * a12));
+    out[3]  = -(a01 * (a12 * a23 - a13 * a22) - a11 * (a02 * a23 - a03 * a22) + a21 * (a02 * a13 - a03 * a12));
+    out[4]  = -(a10 * (a22 * a33 - a23 * a32) - a20 * (a12 * a33 - a13 * a32) + a30 * (a12 * a23 - a13 * a22));
+    out[5]  =  (a00 * (a22 * a33 - a23 * a32) - a20 * (a02 * a33 - a03 * a32) + a30 * (a02 * a23 - a03 * a22));
+    out[6]  = -(a00 * (a12 * a33 - a13 * a32) - a10 * (a02 * a33 - a03 * a32) + a30 * (a02 * a13 - a03 * a12));
+    out[7]  =  (a00 * (a12 * a23 - a13 * a22) - a10 * (a02 * a23 - a03 * a22) + a20 * (a02 * a13 - a03 * a12));
+    out[8]  =  (a10 * (a21 * a33 - a23 * a31) - a20 * (a11 * a33 - a13 * a31) + a30 * (a11 * a23 - a13 * a21));
+    out[9]  = -(a00 * (a21 * a33 - a23 * a31) - a20 * (a01 * a33 - a03 * a31) + a30 * (a01 * a23 - a03 * a21));
+    out[10] =  (a00 * (a11 * a33 - a13 * a31) - a10 * (a01 * a33 - a03 * a31) + a30 * (a01 * a13 - a03 * a11));
+    out[11] = -(a00 * (a11 * a23 - a13 * a21) - a10 * (a01 * a23 - a03 * a21) + a20 * (a01 * a13 - a03 * a11));
+    out[12] = -(a10 * (a21 * a32 - a22 * a31) - a20 * (a11 * a32 - a12 * a31) + a30 * (a11 * a22 - a12 * a21));
+    out[13] =  (a00 * (a21 * a32 - a22 * a31) - a20 * (a01 * a32 - a02 * a31) + a30 * (a01 * a22 - a02 * a21));
+    out[14] = -(a00 * (a11 * a32 - a12 * a31) - a10 * (a01 * a32 - a02 * a31) + a30 * (a01 * a12 - a02 * a11));
+    out[15] =  (a00 * (a11 * a22 - a12 * a21) - a10 * (a01 * a22 - a02 * a21) + a20 * (a01 * a12 - a02 * a11));
+    return out;
+};
+},{}],31:[function(require,module,exports){
+module.exports = clone;
+
+/**
+ * Creates a new mat4 initialized with values from an existing matrix
+ *
+ * @param {mat4} a matrix to clone
+ * @returns {mat4} a new 4x4 matrix
+ */
+function clone(a) {
+    var out = new Float32Array(16);
+    out[0] = a[0];
+    out[1] = a[1];
+    out[2] = a[2];
+    out[3] = a[3];
+    out[4] = a[4];
+    out[5] = a[5];
+    out[6] = a[6];
+    out[7] = a[7];
+    out[8] = a[8];
+    out[9] = a[9];
+    out[10] = a[10];
+    out[11] = a[11];
+    out[12] = a[12];
+    out[13] = a[13];
+    out[14] = a[14];
+    out[15] = a[15];
+    return out;
+};
+},{}],32:[function(require,module,exports){
+module.exports = copy;
+
+/**
+ * Copy the values from one mat4 to another
+ *
+ * @param {mat4} out the receiving matrix
+ * @param {mat4} a the source matrix
+ * @returns {mat4} out
+ */
+function copy(out, a) {
+    out[0] = a[0];
+    out[1] = a[1];
+    out[2] = a[2];
+    out[3] = a[3];
+    out[4] = a[4];
+    out[5] = a[5];
+    out[6] = a[6];
+    out[7] = a[7];
+    out[8] = a[8];
+    out[9] = a[9];
+    out[10] = a[10];
+    out[11] = a[11];
+    out[12] = a[12];
+    out[13] = a[13];
+    out[14] = a[14];
+    out[15] = a[15];
+    return out;
+};
+},{}],33:[function(require,module,exports){
+module.exports = create;
+
+/**
+ * Creates a new identity mat4
+ *
+ * @returns {mat4} a new 4x4 matrix
+ */
+function create() {
+    var out = new Float32Array(16);
+    out[0] = 1;
+    out[1] = 0;
+    out[2] = 0;
+    out[3] = 0;
+    out[4] = 0;
+    out[5] = 1;
+    out[6] = 0;
+    out[7] = 0;
+    out[8] = 0;
+    out[9] = 0;
+    out[10] = 1;
+    out[11] = 0;
+    out[12] = 0;
+    out[13] = 0;
+    out[14] = 0;
+    out[15] = 1;
+    return out;
+};
+},{}],34:[function(require,module,exports){
+module.exports = determinant;
+
+/**
+ * Calculates the determinant of a mat4
+ *
+ * @param {mat4} a the source matrix
+ * @returns {Number} determinant of a
+ */
+function determinant(a) {
+    var a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3],
+        a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7],
+        a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11],
+        a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15],
+
+        b00 = a00 * a11 - a01 * a10,
+        b01 = a00 * a12 - a02 * a10,
+        b02 = a00 * a13 - a03 * a10,
+        b03 = a01 * a12 - a02 * a11,
+        b04 = a01 * a13 - a03 * a11,
+        b05 = a02 * a13 - a03 * a12,
+        b06 = a20 * a31 - a21 * a30,
+        b07 = a20 * a32 - a22 * a30,
+        b08 = a20 * a33 - a23 * a30,
+        b09 = a21 * a32 - a22 * a31,
+        b10 = a21 * a33 - a23 * a31,
+        b11 = a22 * a33 - a23 * a32;
+
+    // Calculate the determinant
+    return b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
+};
+},{}],35:[function(require,module,exports){
+module.exports = fromQuat;
+
+/**
+ * Creates a matrix from a quaternion rotation.
+ *
+ * @param {mat4} out mat4 receiving operation result
+ * @param {quat4} q Rotation quaternion
+ * @returns {mat4} out
+ */
+function fromQuat(out, q) {
+    var x = q[0], y = q[1], z = q[2], w = q[3],
+        x2 = x + x,
+        y2 = y + y,
+        z2 = z + z,
+
+        xx = x * x2,
+        yx = y * x2,
+        yy = y * y2,
+        zx = z * x2,
+        zy = z * y2,
+        zz = z * z2,
+        wx = w * x2,
+        wy = w * y2,
+        wz = w * z2;
+
+    out[0] = 1 - yy - zz;
+    out[1] = yx + wz;
+    out[2] = zx - wy;
+    out[3] = 0;
+
+    out[4] = yx - wz;
+    out[5] = 1 - xx - zz;
+    out[6] = zy + wx;
+    out[7] = 0;
+
+    out[8] = zx + wy;
+    out[9] = zy - wx;
+    out[10] = 1 - xx - yy;
+    out[11] = 0;
+
+    out[12] = 0;
+    out[13] = 0;
+    out[14] = 0;
+    out[15] = 1;
+
+    return out;
+};
+},{}],36:[function(require,module,exports){
+module.exports = fromRotationTranslation;
+
+/**
+ * Creates a matrix from a quaternion rotation and vector translation
+ * This is equivalent to (but much faster than):
+ *
+ *     mat4.identity(dest);
+ *     mat4.translate(dest, vec);
+ *     var quatMat = mat4.create();
+ *     quat4.toMat4(quat, quatMat);
+ *     mat4.multiply(dest, quatMat);
+ *
+ * @param {mat4} out mat4 receiving operation result
+ * @param {quat4} q Rotation quaternion
+ * @param {vec3} v Translation vector
+ * @returns {mat4} out
+ */
+function fromRotationTranslation(out, q, v) {
+    // Quaternion math
+    var x = q[0], y = q[1], z = q[2], w = q[3],
+        x2 = x + x,
+        y2 = y + y,
+        z2 = z + z,
+
+        xx = x * x2,
+        xy = x * y2,
+        xz = x * z2,
+        yy = y * y2,
+        yz = y * z2,
+        zz = z * z2,
+        wx = w * x2,
+        wy = w * y2,
+        wz = w * z2;
+
+    out[0] = 1 - (yy + zz);
+    out[1] = xy + wz;
+    out[2] = xz - wy;
+    out[3] = 0;
+    out[4] = xy - wz;
+    out[5] = 1 - (xx + zz);
+    out[6] = yz + wx;
+    out[7] = 0;
+    out[8] = xz + wy;
+    out[9] = yz - wx;
+    out[10] = 1 - (xx + yy);
+    out[11] = 0;
+    out[12] = v[0];
+    out[13] = v[1];
+    out[14] = v[2];
+    out[15] = 1;
+    
+    return out;
+};
+},{}],37:[function(require,module,exports){
+module.exports = frustum;
+
+/**
+ * Generates a frustum matrix with the given bounds
+ *
+ * @param {mat4} out mat4 frustum matrix will be written into
+ * @param {Number} left Left bound of the frustum
+ * @param {Number} right Right bound of the frustum
+ * @param {Number} bottom Bottom bound of the frustum
+ * @param {Number} top Top bound of the frustum
+ * @param {Number} near Near bound of the frustum
+ * @param {Number} far Far bound of the frustum
+ * @returns {mat4} out
+ */
+function frustum(out, left, right, bottom, top, near, far) {
+    var rl = 1 / (right - left),
+        tb = 1 / (top - bottom),
+        nf = 1 / (near - far);
+    out[0] = (near * 2) * rl;
+    out[1] = 0;
+    out[2] = 0;
+    out[3] = 0;
+    out[4] = 0;
+    out[5] = (near * 2) * tb;
+    out[6] = 0;
+    out[7] = 0;
+    out[8] = (right + left) * rl;
+    out[9] = (top + bottom) * tb;
+    out[10] = (far + near) * nf;
+    out[11] = -1;
+    out[12] = 0;
+    out[13] = 0;
+    out[14] = (far * near * 2) * nf;
+    out[15] = 0;
+    return out;
+};
+},{}],38:[function(require,module,exports){
+module.exports = identity;
+
+/**
+ * Set a mat4 to the identity matrix
+ *
+ * @param {mat4} out the receiving matrix
+ * @returns {mat4} out
+ */
+function identity(out) {
+    out[0] = 1;
+    out[1] = 0;
+    out[2] = 0;
+    out[3] = 0;
+    out[4] = 0;
+    out[5] = 1;
+    out[6] = 0;
+    out[7] = 0;
+    out[8] = 0;
+    out[9] = 0;
+    out[10] = 1;
+    out[11] = 0;
+    out[12] = 0;
+    out[13] = 0;
+    out[14] = 0;
+    out[15] = 1;
+    return out;
+};
+},{}],39:[function(require,module,exports){
+module.exports = {
+  create: require('./create')
+  , clone: require('./clone')
+  , copy: require('./copy')
+  , identity: require('./identity')
+  , transpose: require('./transpose')
+  , invert: require('./invert')
+  , adjoint: require('./adjoint')
+  , determinant: require('./determinant')
+  , multiply: require('./multiply')
+  , translate: require('./translate')
+  , scale: require('./scale')
+  , rotate: require('./rotate')
+  , rotateX: require('./rotateX')
+  , rotateY: require('./rotateY')
+  , rotateZ: require('./rotateZ')
+  , fromRotationTranslation: require('./fromRotationTranslation')
+  , fromQuat: require('./fromQuat')
+  , frustum: require('./frustum')
+  , perspective: require('./perspective')
+  , perspectiveFromFieldOfView: require('./perspectiveFromFieldOfView')
+  , ortho: require('./ortho')
+  , lookAt: require('./lookAt')
+  , str: require('./str')
+}
+},{"./adjoint":30,"./clone":31,"./copy":32,"./create":33,"./determinant":34,"./fromQuat":35,"./fromRotationTranslation":36,"./frustum":37,"./identity":38,"./invert":40,"./lookAt":41,"./multiply":42,"./ortho":43,"./perspective":44,"./perspectiveFromFieldOfView":45,"./rotate":46,"./rotateX":47,"./rotateY":48,"./rotateZ":49,"./scale":50,"./str":51,"./translate":52,"./transpose":53}],40:[function(require,module,exports){
+module.exports = invert;
+
+/**
+ * Inverts a mat4
+ *
+ * @param {mat4} out the receiving matrix
+ * @param {mat4} a the source matrix
+ * @returns {mat4} out
+ */
+function invert(out, a) {
+    var a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3],
+        a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7],
+        a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11],
+        a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15],
+
+        b00 = a00 * a11 - a01 * a10,
+        b01 = a00 * a12 - a02 * a10,
+        b02 = a00 * a13 - a03 * a10,
+        b03 = a01 * a12 - a02 * a11,
+        b04 = a01 * a13 - a03 * a11,
+        b05 = a02 * a13 - a03 * a12,
+        b06 = a20 * a31 - a21 * a30,
+        b07 = a20 * a32 - a22 * a30,
+        b08 = a20 * a33 - a23 * a30,
+        b09 = a21 * a32 - a22 * a31,
+        b10 = a21 * a33 - a23 * a31,
+        b11 = a22 * a33 - a23 * a32,
+
+        // Calculate the determinant
+        det = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
+
+    if (!det) { 
+        return null; 
+    }
+    det = 1.0 / det;
+
+    out[0] = (a11 * b11 - a12 * b10 + a13 * b09) * det;
+    out[1] = (a02 * b10 - a01 * b11 - a03 * b09) * det;
+    out[2] = (a31 * b05 - a32 * b04 + a33 * b03) * det;
+    out[3] = (a22 * b04 - a21 * b05 - a23 * b03) * det;
+    out[4] = (a12 * b08 - a10 * b11 - a13 * b07) * det;
+    out[5] = (a00 * b11 - a02 * b08 + a03 * b07) * det;
+    out[6] = (a32 * b02 - a30 * b05 - a33 * b01) * det;
+    out[7] = (a20 * b05 - a22 * b02 + a23 * b01) * det;
+    out[8] = (a10 * b10 - a11 * b08 + a13 * b06) * det;
+    out[9] = (a01 * b08 - a00 * b10 - a03 * b06) * det;
+    out[10] = (a30 * b04 - a31 * b02 + a33 * b00) * det;
+    out[11] = (a21 * b02 - a20 * b04 - a23 * b00) * det;
+    out[12] = (a11 * b07 - a10 * b09 - a12 * b06) * det;
+    out[13] = (a00 * b09 - a01 * b07 + a02 * b06) * det;
+    out[14] = (a31 * b01 - a30 * b03 - a32 * b00) * det;
+    out[15] = (a20 * b03 - a21 * b01 + a22 * b00) * det;
+
+    return out;
+};
+},{}],41:[function(require,module,exports){
+var identity = require('./identity');
+
+module.exports = lookAt;
+
+/**
+ * Generates a look-at matrix with the given eye position, focal point, and up axis
+ *
+ * @param {mat4} out mat4 frustum matrix will be written into
+ * @param {vec3} eye Position of the viewer
+ * @param {vec3} center Point the viewer is looking at
+ * @param {vec3} up vec3 pointing up
+ * @returns {mat4} out
+ */
+function lookAt(out, eye, center, up) {
+    var x0, x1, x2, y0, y1, y2, z0, z1, z2, len,
+        eyex = eye[0],
+        eyey = eye[1],
+        eyez = eye[2],
+        upx = up[0],
+        upy = up[1],
+        upz = up[2],
+        centerx = center[0],
+        centery = center[1],
+        centerz = center[2];
+
+    if (Math.abs(eyex - centerx) < 0.000001 &&
+        Math.abs(eyey - centery) < 0.000001 &&
+        Math.abs(eyez - centerz) < 0.000001) {
+        return identity(out);
+    }
+
+    z0 = eyex - centerx;
+    z1 = eyey - centery;
+    z2 = eyez - centerz;
+
+    len = 1 / Math.sqrt(z0 * z0 + z1 * z1 + z2 * z2);
+    z0 *= len;
+    z1 *= len;
+    z2 *= len;
+
+    x0 = upy * z2 - upz * z1;
+    x1 = upz * z0 - upx * z2;
+    x2 = upx * z1 - upy * z0;
+    len = Math.sqrt(x0 * x0 + x1 * x1 + x2 * x2);
+    if (!len) {
+        x0 = 0;
+        x1 = 0;
+        x2 = 0;
+    } else {
+        len = 1 / len;
+        x0 *= len;
+        x1 *= len;
+        x2 *= len;
+    }
+
+    y0 = z1 * x2 - z2 * x1;
+    y1 = z2 * x0 - z0 * x2;
+    y2 = z0 * x1 - z1 * x0;
+
+    len = Math.sqrt(y0 * y0 + y1 * y1 + y2 * y2);
+    if (!len) {
+        y0 = 0;
+        y1 = 0;
+        y2 = 0;
+    } else {
+        len = 1 / len;
+        y0 *= len;
+        y1 *= len;
+        y2 *= len;
+    }
+
+    out[0] = x0;
+    out[1] = y0;
+    out[2] = z0;
+    out[3] = 0;
+    out[4] = x1;
+    out[5] = y1;
+    out[6] = z1;
+    out[7] = 0;
+    out[8] = x2;
+    out[9] = y2;
+    out[10] = z2;
+    out[11] = 0;
+    out[12] = -(x0 * eyex + x1 * eyey + x2 * eyez);
+    out[13] = -(y0 * eyex + y1 * eyey + y2 * eyez);
+    out[14] = -(z0 * eyex + z1 * eyey + z2 * eyez);
+    out[15] = 1;
+
+    return out;
+};
+},{"./identity":38}],42:[function(require,module,exports){
+module.exports = multiply;
+
+/**
+ * Multiplies two mat4's
+ *
+ * @param {mat4} out the receiving matrix
+ * @param {mat4} a the first operand
+ * @param {mat4} b the second operand
+ * @returns {mat4} out
+ */
+function multiply(out, a, b) {
+    var a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3],
+        a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7],
+        a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11],
+        a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
+
+    // Cache only the current line of the second matrix
+    var b0  = b[0], b1 = b[1], b2 = b[2], b3 = b[3];  
+    out[0] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
+    out[1] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
+    out[2] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
+    out[3] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
+
+    b0 = b[4]; b1 = b[5]; b2 = b[6]; b3 = b[7];
+    out[4] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
+    out[5] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
+    out[6] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
+    out[7] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
+
+    b0 = b[8]; b1 = b[9]; b2 = b[10]; b3 = b[11];
+    out[8] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
+    out[9] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
+    out[10] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
+    out[11] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
+
+    b0 = b[12]; b1 = b[13]; b2 = b[14]; b3 = b[15];
+    out[12] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
+    out[13] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
+    out[14] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
+    out[15] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
+    return out;
+};
+},{}],43:[function(require,module,exports){
+module.exports = ortho;
+
+/**
+ * Generates a orthogonal projection matrix with the given bounds
+ *
+ * @param {mat4} out mat4 frustum matrix will be written into
+ * @param {number} left Left bound of the frustum
+ * @param {number} right Right bound of the frustum
+ * @param {number} bottom Bottom bound of the frustum
+ * @param {number} top Top bound of the frustum
+ * @param {number} near Near bound of the frustum
+ * @param {number} far Far bound of the frustum
+ * @returns {mat4} out
+ */
+function ortho(out, left, right, bottom, top, near, far) {
+    var lr = 1 / (left - right),
+        bt = 1 / (bottom - top),
+        nf = 1 / (near - far);
+    out[0] = -2 * lr;
+    out[1] = 0;
+    out[2] = 0;
+    out[3] = 0;
+    out[4] = 0;
+    out[5] = -2 * bt;
+    out[6] = 0;
+    out[7] = 0;
+    out[8] = 0;
+    out[9] = 0;
+    out[10] = 2 * nf;
+    out[11] = 0;
+    out[12] = (left + right) * lr;
+    out[13] = (top + bottom) * bt;
+    out[14] = (far + near) * nf;
+    out[15] = 1;
+    return out;
+};
+},{}],44:[function(require,module,exports){
+module.exports = perspective;
+
+/**
+ * Generates a perspective projection matrix with the given bounds
+ *
+ * @param {mat4} out mat4 frustum matrix will be written into
+ * @param {number} fovy Vertical field of view in radians
+ * @param {number} aspect Aspect ratio. typically viewport width/height
+ * @param {number} near Near bound of the frustum
+ * @param {number} far Far bound of the frustum
+ * @returns {mat4} out
+ */
+function perspective(out, fovy, aspect, near, far) {
+    var f = 1.0 / Math.tan(fovy / 2),
+        nf = 1 / (near - far);
+    out[0] = f / aspect;
+    out[1] = 0;
+    out[2] = 0;
+    out[3] = 0;
+    out[4] = 0;
+    out[5] = f;
+    out[6] = 0;
+    out[7] = 0;
+    out[8] = 0;
+    out[9] = 0;
+    out[10] = (far + near) * nf;
+    out[11] = -1;
+    out[12] = 0;
+    out[13] = 0;
+    out[14] = (2 * far * near) * nf;
+    out[15] = 0;
+    return out;
+};
+},{}],45:[function(require,module,exports){
+module.exports = perspectiveFromFieldOfView;
+
+/**
+ * Generates a perspective projection matrix with the given field of view.
+ * This is primarily useful for generating projection matrices to be used
+ * with the still experiemental WebVR API.
+ *
+ * @param {mat4} out mat4 frustum matrix will be written into
+ * @param {number} fov Object containing the following values: upDegrees, downDegrees, leftDegrees, rightDegrees
+ * @param {number} near Near bound of the frustum
+ * @param {number} far Far bound of the frustum
+ * @returns {mat4} out
+ */
+function perspectiveFromFieldOfView(out, fov, near, far) {
+    var upTan = Math.tan(fov.upDegrees * Math.PI/180.0),
+        downTan = Math.tan(fov.downDegrees * Math.PI/180.0),
+        leftTan = Math.tan(fov.leftDegrees * Math.PI/180.0),
+        rightTan = Math.tan(fov.rightDegrees * Math.PI/180.0),
+        xScale = 2.0 / (leftTan + rightTan),
+        yScale = 2.0 / (upTan + downTan);
+
+    out[0] = xScale;
+    out[1] = 0.0;
+    out[2] = 0.0;
+    out[3] = 0.0;
+    out[4] = 0.0;
+    out[5] = yScale;
+    out[6] = 0.0;
+    out[7] = 0.0;
+    out[8] = -((leftTan - rightTan) * xScale * 0.5);
+    out[9] = ((upTan - downTan) * yScale * 0.5);
+    out[10] = far / (near - far);
+    out[11] = -1.0;
+    out[12] = 0.0;
+    out[13] = 0.0;
+    out[14] = (far * near) / (near - far);
+    out[15] = 0.0;
+    return out;
+}
+
+
+},{}],46:[function(require,module,exports){
+module.exports = rotate;
+
+/**
+ * Rotates a mat4 by the given angle
+ *
+ * @param {mat4} out the receiving matrix
+ * @param {mat4} a the matrix to rotate
+ * @param {Number} rad the angle to rotate the matrix by
+ * @param {vec3} axis the axis to rotate around
+ * @returns {mat4} out
+ */
+function rotate(out, a, rad, axis) {
+    var x = axis[0], y = axis[1], z = axis[2],
+        len = Math.sqrt(x * x + y * y + z * z),
+        s, c, t,
+        a00, a01, a02, a03,
+        a10, a11, a12, a13,
+        a20, a21, a22, a23,
+        b00, b01, b02,
+        b10, b11, b12,
+        b20, b21, b22;
+
+    if (Math.abs(len) < 0.000001) { return null; }
+    
+    len = 1 / len;
+    x *= len;
+    y *= len;
+    z *= len;
+
+    s = Math.sin(rad);
+    c = Math.cos(rad);
+    t = 1 - c;
+
+    a00 = a[0]; a01 = a[1]; a02 = a[2]; a03 = a[3];
+    a10 = a[4]; a11 = a[5]; a12 = a[6]; a13 = a[7];
+    a20 = a[8]; a21 = a[9]; a22 = a[10]; a23 = a[11];
+
+    // Construct the elements of the rotation matrix
+    b00 = x * x * t + c; b01 = y * x * t + z * s; b02 = z * x * t - y * s;
+    b10 = x * y * t - z * s; b11 = y * y * t + c; b12 = z * y * t + x * s;
+    b20 = x * z * t + y * s; b21 = y * z * t - x * s; b22 = z * z * t + c;
+
+    // Perform rotation-specific matrix multiplication
+    out[0] = a00 * b00 + a10 * b01 + a20 * b02;
+    out[1] = a01 * b00 + a11 * b01 + a21 * b02;
+    out[2] = a02 * b00 + a12 * b01 + a22 * b02;
+    out[3] = a03 * b00 + a13 * b01 + a23 * b02;
+    out[4] = a00 * b10 + a10 * b11 + a20 * b12;
+    out[5] = a01 * b10 + a11 * b11 + a21 * b12;
+    out[6] = a02 * b10 + a12 * b11 + a22 * b12;
+    out[7] = a03 * b10 + a13 * b11 + a23 * b12;
+    out[8] = a00 * b20 + a10 * b21 + a20 * b22;
+    out[9] = a01 * b20 + a11 * b21 + a21 * b22;
+    out[10] = a02 * b20 + a12 * b21 + a22 * b22;
+    out[11] = a03 * b20 + a13 * b21 + a23 * b22;
+
+    if (a !== out) { // If the source and destination differ, copy the unchanged last row
+        out[12] = a[12];
+        out[13] = a[13];
+        out[14] = a[14];
+        out[15] = a[15];
+    }
+    return out;
+};
+},{}],47:[function(require,module,exports){
+module.exports = rotateX;
+
+/**
+ * Rotates a matrix by the given angle around the X axis
+ *
+ * @param {mat4} out the receiving matrix
+ * @param {mat4} a the matrix to rotate
+ * @param {Number} rad the angle to rotate the matrix by
+ * @returns {mat4} out
+ */
+function rotateX(out, a, rad) {
+    var s = Math.sin(rad),
+        c = Math.cos(rad),
+        a10 = a[4],
+        a11 = a[5],
+        a12 = a[6],
+        a13 = a[7],
+        a20 = a[8],
+        a21 = a[9],
+        a22 = a[10],
+        a23 = a[11];
+
+    if (a !== out) { // If the source and destination differ, copy the unchanged rows
+        out[0]  = a[0];
+        out[1]  = a[1];
+        out[2]  = a[2];
+        out[3]  = a[3];
+        out[12] = a[12];
+        out[13] = a[13];
+        out[14] = a[14];
+        out[15] = a[15];
+    }
+
+    // Perform axis-specific matrix multiplication
+    out[4] = a10 * c + a20 * s;
+    out[5] = a11 * c + a21 * s;
+    out[6] = a12 * c + a22 * s;
+    out[7] = a13 * c + a23 * s;
+    out[8] = a20 * c - a10 * s;
+    out[9] = a21 * c - a11 * s;
+    out[10] = a22 * c - a12 * s;
+    out[11] = a23 * c - a13 * s;
+    return out;
+};
+},{}],48:[function(require,module,exports){
+module.exports = rotateY;
+
+/**
+ * Rotates a matrix by the given angle around the Y axis
+ *
+ * @param {mat4} out the receiving matrix
+ * @param {mat4} a the matrix to rotate
+ * @param {Number} rad the angle to rotate the matrix by
+ * @returns {mat4} out
+ */
+function rotateY(out, a, rad) {
+    var s = Math.sin(rad),
+        c = Math.cos(rad),
+        a00 = a[0],
+        a01 = a[1],
+        a02 = a[2],
+        a03 = a[3],
+        a20 = a[8],
+        a21 = a[9],
+        a22 = a[10],
+        a23 = a[11];
+
+    if (a !== out) { // If the source and destination differ, copy the unchanged rows
+        out[4]  = a[4];
+        out[5]  = a[5];
+        out[6]  = a[6];
+        out[7]  = a[7];
+        out[12] = a[12];
+        out[13] = a[13];
+        out[14] = a[14];
+        out[15] = a[15];
+    }
+
+    // Perform axis-specific matrix multiplication
+    out[0] = a00 * c - a20 * s;
+    out[1] = a01 * c - a21 * s;
+    out[2] = a02 * c - a22 * s;
+    out[3] = a03 * c - a23 * s;
+    out[8] = a00 * s + a20 * c;
+    out[9] = a01 * s + a21 * c;
+    out[10] = a02 * s + a22 * c;
+    out[11] = a03 * s + a23 * c;
+    return out;
+};
+},{}],49:[function(require,module,exports){
+module.exports = rotateZ;
+
+/**
+ * Rotates a matrix by the given angle around the Z axis
+ *
+ * @param {mat4} out the receiving matrix
+ * @param {mat4} a the matrix to rotate
+ * @param {Number} rad the angle to rotate the matrix by
+ * @returns {mat4} out
+ */
+function rotateZ(out, a, rad) {
+    var s = Math.sin(rad),
+        c = Math.cos(rad),
+        a00 = a[0],
+        a01 = a[1],
+        a02 = a[2],
+        a03 = a[3],
+        a10 = a[4],
+        a11 = a[5],
+        a12 = a[6],
+        a13 = a[7];
+
+    if (a !== out) { // If the source and destination differ, copy the unchanged last row
+        out[8]  = a[8];
+        out[9]  = a[9];
+        out[10] = a[10];
+        out[11] = a[11];
+        out[12] = a[12];
+        out[13] = a[13];
+        out[14] = a[14];
+        out[15] = a[15];
+    }
+
+    // Perform axis-specific matrix multiplication
+    out[0] = a00 * c + a10 * s;
+    out[1] = a01 * c + a11 * s;
+    out[2] = a02 * c + a12 * s;
+    out[3] = a03 * c + a13 * s;
+    out[4] = a10 * c - a00 * s;
+    out[5] = a11 * c - a01 * s;
+    out[6] = a12 * c - a02 * s;
+    out[7] = a13 * c - a03 * s;
+    return out;
+};
+},{}],50:[function(require,module,exports){
+module.exports = scale;
+
+/**
+ * Scales the mat4 by the dimensions in the given vec3
+ *
+ * @param {mat4} out the receiving matrix
+ * @param {mat4} a the matrix to scale
+ * @param {vec3} v the vec3 to scale the matrix by
+ * @returns {mat4} out
+ **/
+function scale(out, a, v) {
+    var x = v[0], y = v[1], z = v[2];
+
+    out[0] = a[0] * x;
+    out[1] = a[1] * x;
+    out[2] = a[2] * x;
+    out[3] = a[3] * x;
+    out[4] = a[4] * y;
+    out[5] = a[5] * y;
+    out[6] = a[6] * y;
+    out[7] = a[7] * y;
+    out[8] = a[8] * z;
+    out[9] = a[9] * z;
+    out[10] = a[10] * z;
+    out[11] = a[11] * z;
+    out[12] = a[12];
+    out[13] = a[13];
+    out[14] = a[14];
+    out[15] = a[15];
+    return out;
+};
+},{}],51:[function(require,module,exports){
+module.exports = str;
+
+/**
+ * Returns a string representation of a mat4
+ *
+ * @param {mat4} mat matrix to represent as a string
+ * @returns {String} string representation of the matrix
+ */
+function str(a) {
+    return 'mat4(' + a[0] + ', ' + a[1] + ', ' + a[2] + ', ' + a[3] + ', ' +
+                    a[4] + ', ' + a[5] + ', ' + a[6] + ', ' + a[7] + ', ' +
+                    a[8] + ', ' + a[9] + ', ' + a[10] + ', ' + a[11] + ', ' + 
+                    a[12] + ', ' + a[13] + ', ' + a[14] + ', ' + a[15] + ')';
+};
+},{}],52:[function(require,module,exports){
+module.exports = translate;
+
+/**
+ * Translate a mat4 by the given vector
+ *
+ * @param {mat4} out the receiving matrix
+ * @param {mat4} a the matrix to translate
+ * @param {vec3} v vector to translate by
+ * @returns {mat4} out
+ */
+function translate(out, a, v) {
+    var x = v[0], y = v[1], z = v[2],
+        a00, a01, a02, a03,
+        a10, a11, a12, a13,
+        a20, a21, a22, a23;
+
+    if (a === out) {
+        out[12] = a[0] * x + a[4] * y + a[8] * z + a[12];
+        out[13] = a[1] * x + a[5] * y + a[9] * z + a[13];
+        out[14] = a[2] * x + a[6] * y + a[10] * z + a[14];
+        out[15] = a[3] * x + a[7] * y + a[11] * z + a[15];
+    } else {
+        a00 = a[0]; a01 = a[1]; a02 = a[2]; a03 = a[3];
+        a10 = a[4]; a11 = a[5]; a12 = a[6]; a13 = a[7];
+        a20 = a[8]; a21 = a[9]; a22 = a[10]; a23 = a[11];
+
+        out[0] = a00; out[1] = a01; out[2] = a02; out[3] = a03;
+        out[4] = a10; out[5] = a11; out[6] = a12; out[7] = a13;
+        out[8] = a20; out[9] = a21; out[10] = a22; out[11] = a23;
+
+        out[12] = a00 * x + a10 * y + a20 * z + a[12];
+        out[13] = a01 * x + a11 * y + a21 * z + a[13];
+        out[14] = a02 * x + a12 * y + a22 * z + a[14];
+        out[15] = a03 * x + a13 * y + a23 * z + a[15];
+    }
+
+    return out;
+};
+},{}],53:[function(require,module,exports){
+module.exports = transpose;
+
+/**
+ * Transpose the values of a mat4
+ *
+ * @param {mat4} out the receiving matrix
+ * @param {mat4} a the source matrix
+ * @returns {mat4} out
+ */
+function transpose(out, a) {
+    // If we are transposing ourselves we can skip a few steps but have to cache some values
+    if (out === a) {
+        var a01 = a[1], a02 = a[2], a03 = a[3],
+            a12 = a[6], a13 = a[7],
+            a23 = a[11];
+
+        out[1] = a[4];
+        out[2] = a[8];
+        out[3] = a[12];
+        out[4] = a01;
+        out[6] = a[9];
+        out[7] = a[13];
+        out[8] = a02;
+        out[9] = a12;
+        out[11] = a[14];
+        out[12] = a03;
+        out[13] = a13;
+        out[14] = a23;
+    } else {
+        out[0] = a[0];
+        out[1] = a[4];
+        out[2] = a[8];
+        out[3] = a[12];
+        out[4] = a[1];
+        out[5] = a[5];
+        out[6] = a[9];
+        out[7] = a[13];
+        out[8] = a[2];
+        out[9] = a[6];
+        out[10] = a[10];
+        out[11] = a[14];
+        out[12] = a[3];
+        out[13] = a[7];
+        out[14] = a[11];
+        out[15] = a[15];
+    }
+    
+    return out;
+};
+},{}],54:[function(require,module,exports){
 /**
  * @license twgl.js 0.0.38 Copyright (c) 2015, Gregg Tavares All Rights Reserved.
  * Available via the MIT license.
@@ -7008,7 +10184,7 @@ define("build/js/twgl-includer-full", function(){});
     return notrequirebecasebrowserifymessesup('main');
 }));
 
-},{}],5:[function(require,module,exports){
+},{}],55:[function(require,module,exports){
 //     Underscore.js 1.8.3
 //     http://underscorejs.org
 //     (c) 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
@@ -8558,7 +11734,9 @@ define("build/js/twgl-includer-full", function(){});
   }
 }.call(this));
 
-},{}],6:[function(require,module,exports){
+},{}],56:[function(require,module,exports){
+var createCamera = require('3d-view');
+
 
 var faceFs = "#define GLSLIFY 1\nprecision mediump float;\nvarying vec4 v_color;\nvarying vec3 v_normal;\n// varying vec2 v_texCoord;\nvarying vec3 v_surfaceToLight;\nvarying vec3 v_surfaceToView;\n\nuniform vec4 u_lightColor;\nuniform vec4 u_ambient;\nuniform vec4 u_specular;\nuniform float u_shininess;\nuniform float u_specularFactor;\n//uniform sampler2D u_texture;\n\nvec4 lit(float l ,float h, float m) {\n  return vec4(1.0,\n              max(l, 0.0),\n              (l > 0.0) ? pow(max(0.0, h), m) : 0.0,\n              1.0);\n}\n\nvoid main() {\n  // vec4 texColor = texture2D(u_texture, v_texCoord);\n  vec4 texColor = v_color;\n  vec3 normal = normalize(v_normal);\n  vec3 surfaceToLight = normalize(v_surfaceToLight);\n  vec3 surfaceToView = normalize(v_surfaceToView);\n  vec3 halfVector = normalize(surfaceToLight + surfaceToView);\n\n  vec4 litR = lit(dot(normal, surfaceToLight),\n                dot(normal, halfVector), u_shininess);\n\n  vec4 outColor = vec4(\n      (u_lightColor * (texColor * litR.y + texColor * u_ambient)).rgb,\n      texColor.a);\n\n  gl_FragColor = outColor;\n}\n";
 var faceVs = "#define GLSLIFY 1\nprecision mediump float;\nattribute vec3 position;\nattribute vec3 normal;\n// attribute vec2 texcoord;\n// attribute vec3 color;\n\nvarying vec4 v_position;\nvarying vec4 v_color;\nvarying vec3 v_normal;\n// varying vec2 v_texCoord;\nvarying vec3 v_surfaceToLight;\nvarying vec3 v_surfaceToView;\n\nuniform vec3 u_lightWorldPos;\nuniform mat4 u_camera;\nuniform mat4 u_worldViewProjection;\nuniform mat4 u_world;\nuniform mat4 u_worldRotation;\n//uniform sampler2D u_texture;\n\nvoid main() {\n  v_color = vec4(0.9, 0.5, 0.8, 1);\n  v_normal = (u_worldRotation * vec4(normal, 0)).xyz;\n  // v_texCoord = texcoord;\n  v_position = vec4(position, 1.0);\n  v_surfaceToLight = u_lightWorldPos - (u_world * v_position).xyz;\n  v_surfaceToView = (u_camera[3] - (u_world * v_position)).xyz;\n  gl_Position = (u_worldViewProjection * v_position);\n}\n";
@@ -8566,10 +11744,8 @@ var foldFs = "#define GLSLIFY 1\nprecision mediump float;\n\nuniform vec3 u_ligh
 var foldVs = "#define GLSLIFY 1\nprecision mediump float;\nattribute vec3 position;\nattribute float foldType;\nattribute float lengthSoFar;\n\nuniform vec3 u_lightWorldPos;\nuniform mat4 u_camera;\nuniform mat4 u_worldViewProjection;\nuniform mat4 u_world;\nuniform mat4 u_worldRotation;\n\nvarying float v_foldType;\nvarying float v_lengthSoFar;\nvarying vec4 v_position;\n\nvoid main() {\n  v_lengthSoFar = lengthSoFar;\n  v_position = vec4(position, 1);\n  v_foldType = foldType;\n  gl_Position = (u_worldViewProjection * v_position);\n}\n";
 var depthnormalFs = "#define GLSLIFY 1\nprecision mediump float;\nvarying vec4 v_position;\nvarying vec3 v_normal;\n\nuniform mat4 u_worldViewProjection;\nuniform mat4 u_worldRotation;\nuniform float u_near;\nuniform float u_far;\n\nfloat encode_depth (vec3 position) {\n  float depth = (position.z - u_near)/(u_far - u_near);\n  return depth;\n}\n\nvec3 encode_normal (vec3 normal) {\n  vec3 encoded = (normal + 1.0) / 2.0;\n  return encoded;\n}\n\nvoid main() {\n  vec3 position = (u_worldViewProjection * v_position).xyz;\n  vec3 normal = v_normal;\n  gl_FragColor = vec4(encode_normal(normal), encode_depth(position));\n}\n";
 
-var _ = require('underscore')._;
 var twgl = require('twgl.js');
-var v3 = twgl.v3;
-var m4 = twgl.m4;
+var m4 = require('gl-mat4');
 
 var createFaceBufferInfo = require('./createFaceBufferInfo.js');
 var createFoldBufferInfo = require('./createFoldBufferInfo.js');
@@ -8586,8 +11762,16 @@ var Renderer = function (canvas, data) {
   this.depthProgramInfo = twgl.createProgramInfoFromProgram(gl, depthProgram);
   this.foldProgramInfo = twgl.createProgramInfoFromProgram(gl, foldProgram);
 
-  this.rotation = [0, 0];
-  this.onMouseDown = getOnMouseDown(this.rotation);
+  this.camera = createCamera({
+    center: [0, 0.5, 0],
+    eye: [0, 1, -3],
+    distanceLimits: [1, 100],
+    up: [0, 0, 1],
+    mode: 'orbit'
+  });
+
+  //this.rotation = [0, 0];
+  this.onMouseDown = getOnMouseDown(gl, this.camera);
   if (data) {
     this.data(data);
   }
@@ -8600,7 +11784,7 @@ Renderer.prototype.data = function (data) {
   var gl = this.gl;
   var facesPerLayer = data.layers;
   var foldsPerLayer = data.folds;
-  var points = data.points;
+  // var points = data.points;
 
   this.faceBufferInfo = createFaceBufferInfo(gl, facesPerLayer);
   this.foldBufferInfo = createFoldBufferInfo(gl, foldsPerLayer);
@@ -8615,8 +11799,9 @@ Renderer.prototype.play = function () {
   return this;
 };
 
-Renderer.prototype.render = function (time) {
+Renderer.prototype.render = function () {
   var gl = this.gl;
+
   twgl.resizeCanvasToDisplaySize(gl.canvas);
   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
@@ -8636,54 +11821,47 @@ Renderer.prototype.render = function (time) {
 Renderer.prototype.getUniforms = function () {
   if (!this.uniforms) {
     this.uniforms = this.createUniforms();
-  } else {
-    var rotateX = twgl.m4.rotationX(this.rotation[0]);
-    var rotateY = twgl.m4.rotationY(this.rotation[1]);
-    var world = twgl.m4.multiply(rotateX, rotateY);
-
-    var worldView = twgl.m4.multiply(world, this.uniforms.u_view);
-    var worldViewProjection = twgl.m4.multiply(world, this.uniforms.u_viewProjection);
-
-    this.uniforms.u_world = world;
-    this.uniforms.u_worldRotation = world;
-    this.uniforms.u_worldViewProjection = worldViewProjection;
   }
+  var gl = this.gl;
+  var t = Date.now();
+  var camera = this.camera;
+
+  camera.idle(t - 20);
+  camera.flush(t - 100);
+  camera.recalcMatrix(t - 25);
+
+  // Update camera uniforms.
+  var view = camera.computedMatrix;
+  var projection = m4.perspective(
+      [],
+      Math.PI/4.0,
+      gl.drawingBufferWidth/gl.drawingBufferHeight,
+      0.1,
+      100
+  );
+
+  var viewProjection = m4.multiply([], projection, view);
+  var worldViewProjection = m4.multiply([], viewProjection, this.uniforms.u_world);
+
+  this.uniforms.u_near = 1;
+  this.uniforms.u_far = 100;
+  this.uniforms.u_view = view;
+  this.uniforms.u_camera = m4.invert([], view);
+  this.uniforms.u_worldViewProjection = worldViewProjection;
+
   return this.uniforms;
 };
 
 Renderer.prototype.createUniforms = function () {
-  var gl = this.gl;
-  var eye = [0, 1, -4];
-  var target = [0, 0.5, 0];
-  var up = [0, 1, 0];
-  var near = 1;
-  var far = 100;
-
-  var projection = m4.perspective(30 * Math.PI / 180, gl.canvas.clientWidth / gl.canvas.clientHeight, near, far);
-  var camera = m4.lookAt(eye, target, up);
-  var view = m4.inverse(camera);
-  var viewProjection = m4.multiply(view, projection);
-
-  var rotateX = m4.rotationX(this.rotation[0]);
-  var rotateY = m4.rotationY(this.rotation[1]);
-  var world = m4.multiply(rotateX, rotateY);
-
-  var worldView = m4.multiply(world, view);
-  var worldViewProjection = m4.multiply(world, viewProjection);
+  var world = m4.identity([]);
 
   var uniforms = {
-    u_near: near,
-    u_far: far,
     u_lightWorldPos: [-3, 3, -8],
     u_lightColor: [1, 0.9, 0.8, 1],
     u_ambient: [0, 0, 0, 1],
     u_specular: [1, 1, 0.8, 1],
     u_shininess: 70,
     u_specularFactor: 0.8,
-    u_camera: camera,
-    u_view: view,
-    u_viewProjection: viewProjection,
-    u_worldViewProjection: worldViewProjection,
     u_worldRotation: world,
     u_world: world
   };
@@ -8706,26 +11884,27 @@ function renderPass (gl, programInfo, bufferInfo, uniforms, drawType) {
   twgl.drawBufferInfo(gl, gl[drawType], bufferInfo);
 }
 
-function getOnMouseDown (rotation) {
-  var onMouseDown = function (e) {
-    var canvas = e.currentTarget;
+function getOnMouseDown (gl, camera) {
+  var onMouseDown = function (ev) {
+    var canvas = ev.currentTarget;
     canvas.addEventListener('mousemove', onMouseMove);
     canvas.addEventListener('mouseup', onMouseUp);
 
-    var startX = e.offsetX;
-    var startY = e.offsetY;
+    var startX = ev.offsetX;
+    var startY = ev.offsetY;
     var currentX = startX;
     var currentY = startY;
 
-    function onMouseMove (e) {
-      var nextX = e.offsetX;
-      var nextY = e.offsetY;
-      pan(rotation, nextX - currentX, nextY - currentY, canvas);
-      currentX = nextX;
-      currentY = nextY;
+    function onMouseMove (ev) {
+      var dx = (ev.offsetX - currentX) * 4/ gl.drawingBufferWidth;
+      var dy = (ev.offsetY - currentY) * 4/ gl.drawingBufferHeight;
+
+      camera.rotate(Date.now(), -dx, dy);
+      currentX = ev.offsetX;
+      currentY = ev.offsetY;
     }
 
-    function onMouseUp (e) {
+    function onMouseUp () {
       canvas.removeEventListener('mousemove', onMouseMove);
       canvas.removeEventListener('mouseup', onMouseUp);
     }
@@ -8733,55 +11912,49 @@ function getOnMouseDown (rotation) {
   return onMouseDown;
 }
 
-function pan (rotation, dX, dY, canvas) {
-  rotation[0] += 10 * dY / canvas.clientHeight;
-  rotation[1] += 10 * dX / canvas.clientWidth;
-  return rotation;
-}
+// function toPixelClipSpace (gl, point) {
+//   var pixel = [];
+//   pixel[0] = (point[0] *  0.5 + 0.5) * gl.canvas.width;
+//   pixel[1] = (point[1] * -0.5 + 0.5) * gl.canvas.height;
+//   return pixel;
+// }
 
-function toPixelClipSpace (gl, point) {
-  var pixel = [];
-  pixel[0] = (point[0] *  0.5 + 0.5) * gl.canvas.width;
-  pixel[1] = (point[1] * -0.5 + 0.5) * gl.canvas.height;
-  return pixel;
-}
+// function createPointDivs (points) {
+//   return _.map(points, createPoint);
+// }
 
-function createPointDivs (points) {
-  return _.map(points, createPoint);
-}
+// function renderPoints(points, divs) {
+//   _.each(points, function (point, i) {
+//     renderPoint(point, divs[i]);
+//   });
+// }
 
-function renderPoints(points, divs) {
-  _.each(points, function (point, i) {
-    renderPoint(point, divs[i]);
-  });
-}
+// function createPoint (point, id) {
+//   var pointDiv = document.createElement('div');
+//   pointDiv.classList.add('floating');
+//   pointDiv.textContent = id;
+//   document.body.appendChild(pointDiv);
+//   return pointDiv;
+// }
 
-function createPoint (point, id) {
-  var pointDiv = document.createElement('div');
-  pointDiv.classList.add('floating');
-  pointDiv.textContent = id;
-  document.body.appendChild(pointDiv);
-  return pointDiv;
-}
+// function renderPoint (point, div) {
+//   var adjustedPoint = twgl.v3.create();
+//   adjustedPoint[0] = point[0];
+//   adjustedPoint[1] = point[1];
+//   adjustedPoint[2] = point[2];
 
-function renderPoint (point, div) {
-  var adjustedPoint = twgl.v3.create();
-  adjustedPoint[0] = point[0];
-  adjustedPoint[1] = point[1];
-  adjustedPoint[2] = point[2];
+//   twgl.m4.transformPoint(worldViewProjection, adjustedPoint, adjustedPoint);
 
-  twgl.m4.transformPoint(worldViewProjection, adjustedPoint, adjustedPoint);
+//   var pixelPoint = toPixelClipSpace(gl, adjustedPoint);
 
-  var pixelPoint = toPixelClipSpace(gl, adjustedPoint);
+//   div.style.left = Math.floor(pixelPoint[0]) + 'px';
+//   div.style.top = Math.floor(pixelPoint[1]) + 'px';
+// }
 
-  div.style.left = Math.floor(pixelPoint[0]) + 'px';
-  div.style.top = Math.floor(pixelPoint[1]) + 'px';
-}
-
-},{"./createFaceBufferInfo.js":2,"./createFoldBufferInfo.js":3,"twgl.js":4,"underscore":5}],7:[function(require,module,exports){
+},{"./createFaceBufferInfo.js":2,"./createFoldBufferInfo.js":3,"3d-view":29,"gl-mat4":39,"twgl.js":54}],57:[function(require,module,exports){
 module.exports = "<style>\n  canvas {\n    height: 100%;\n    width: 100%;\n  }\n</style>\n<canvas></canvas>\n";
 
-},{}],8:[function(require,module,exports){
+},{}],58:[function(require,module,exports){
 var Component = require('./component.js');
 var Renderer = require('./renderer.js');
 
@@ -8814,5 +11987,5 @@ var Viewer = Component('kokorigami-viewer', {
 
 module.exports = Viewer;
 
-},{"./component.js":1,"./renderer.js":6,"./viewer.html":7}]},{},[8])(8)
+},{"./component.js":1,"./renderer.js":56,"./viewer.html":57}]},{},[58])(58)
 });
