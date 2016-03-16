@@ -167,13 +167,13 @@ function getOnMouseDown (gl, camera) {
     var currentX = startX;
     var currentY = startY;
 
-    function onMouseMove (ev) {
-      var dx = (ev.offsetX - currentX) * 4/ gl.drawingBufferWidth;
-      var dy = (ev.offsetY - currentY) * 4/ gl.drawingBufferHeight;
+    function onMouseMove (mev) {
+      var dx = (mev.offsetX - currentX) * 4/ gl.drawingBufferWidth;
+      var dy = (mev.offsetY - currentY) * 4/ gl.drawingBufferHeight;
 
       camera.rotate(Date.now(), -dx, dy);
-      currentX = ev.offsetX;
-      currentY = ev.offsetY;
+      currentX = mev.offsetX;
+      currentY = mev.offsetY;
     }
 
     function onMouseUp () {
