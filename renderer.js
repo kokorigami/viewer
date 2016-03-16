@@ -1,4 +1,5 @@
 var createCamera = require('3d-view');
+var createShader = require('gl-shader');
 
 var glslify = require('glslify');
 var faceFs = glslify('./face-fs.glsl');
@@ -17,13 +18,14 @@ var Renderer = function (canvas, data) {
   var gl = this.gl = twgl.getWebGLContext(canvas);
   this.render = this.render.bind(this);
 
-  var faceProgram = twgl.createProgramFromSources(gl, [faceVs, faceFs]);
-  var depthProgram = twgl.createProgramFromSources(gl, [faceVs, depthnormalFs]);
-  var foldProgram = twgl.createProgramFromSources(gl, [foldVs, foldFs]);
+  this.shaders = {};
+  this.shaders.face = createShader(gl, faceVs, faceFs);
+  this.shaders.depth = createShader(gl, faceVs, depthnormalFs);
+  this.shaders.fold = createShader(gl, foldVs, foldFs);
 
-  this.faceProgramInfo = twgl.createProgramInfoFromProgram(gl, faceProgram);
-  this.depthProgramInfo = twgl.createProgramInfoFromProgram(gl, depthProgram);
-  this.foldProgramInfo = twgl.createProgramInfoFromProgram(gl, foldProgram);
+  // this.faceProgramInfo = twgl.createProgramInfoFromProgram(gl, faceProgram);
+  // this.depthProgramInfo = twgl.createProgramInfoFromProgram(gl, depthProgram);
+  // this.foldProgramInfo = twgl.createProgramInfoFromProgram(gl, foldProgram);
 
   this.camera = createCamera({
     center: [0, 0.5, 0],
@@ -33,8 +35,8 @@ var Renderer = function (canvas, data) {
     mode: 'orbit'
   });
 
-  //this.rotation = [0, 0];
   this.onMouseDown = getOnMouseDown(gl, this.camera);
+
   if (data) {
     this.data(data);
   }
@@ -55,8 +57,8 @@ Renderer.prototype.data = function (data) {
 };
 
 Renderer.prototype.play = function () {
-  // Setup listeners
   this.stop();
+  this.gl.enable(this.gl.DEPTH_TEST);
   this.gl.canvas.addEventListener('mousedown', this.onMouseDown);
   this.frame = requestAnimationFrame(this.render);
   return this;
@@ -69,13 +71,12 @@ Renderer.prototype.render = function () {
   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  gl.enable(gl.DEPTH_TEST);
 
   var uniforms = this.getUniforms();
 
   //renderPass(gl, depthProgramInfo, faceBufferInfo, uniforms, 'TRIANGLES');
-  renderPass(gl, this.faceProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
-  renderPass(gl, this.foldProgramInfo, this.foldBufferInfo, uniforms, 'LINES');
+  renderPass(gl, this.shaders.face, this.faceBufferInfo, uniforms, 'TRIANGLES');
+  renderPass(gl, this.shaders.fold, this.foldBufferInfo, uniforms, 'LINES');
 
   //renderPoints(points, pointDivs);
   requestAnimationFrame(this.render);
@@ -132,19 +133,17 @@ Renderer.prototype.createUniforms = function () {
 };
 
 Renderer.prototype.stop = function () {
-  // TODO: remove listeners animation frames
   cancelAnimationFrame(this.frame);
   this.gl.canvas.removeEventListener('mousedown', this.onMouseDown);
   return this;
 };
 
-//var pointDivs = createPointDivs(points);
-
-function renderPass (gl, programInfo, bufferInfo, uniforms, drawType) {
-  gl.useProgram(programInfo.program);
-  twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo);
-  twgl.setUniforms(programInfo, uniforms);
-  twgl.drawBufferInfo(gl, gl[drawType], bufferInfo);
+function renderPass (gl, shader, geom, uniforms, drawType) {
+  shader.bind();
+  shader.uniforms = uniforms;
+  geom.bind(shader);
+  geom.draw(gl[drawType]);
+  geom.unbind();
 }
 
 function getOnMouseDown (gl, camera) {
@@ -174,6 +173,8 @@ function getOnMouseDown (gl, camera) {
   };
   return onMouseDown;
 }
+
+// var pointDivs = createPointDivs(points);
 
 // function toPixelClipSpace (gl, point) {
 //   var pixel = [];

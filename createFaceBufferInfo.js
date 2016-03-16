@@ -1,16 +1,19 @@
 var _ = require('underscore')._;
 var twgl = require('twgl.js');
 var v3 = twgl.v3;
+var createGeometry = require('gl-geometry');
 
 function createFaceBufferInfo (gl, facesPerLayer) {
-  var faceArributes = getFaceBufferArrays(facesPerLayer);
-  var faceBufferInfo = twgl.createBufferInfoFromArrays(gl, faceArributes);
-  return faceBufferInfo;
+  var faceAttributes = getFaceBufferArrays(facesPerLayer);
+  var geom = createGeometry(gl)
+    .attr('position', faceAttributes.position)
+    .attr('normal', faceAttributes.normal);
+  return geom;
 }
 
 module.exports = createFaceBufferInfo;
 
-function getFaceBufferArrays (faces) {
+function getFaceBufferArrays (layers) {
   var thickness = 0.005;
   var positions = [];
   var normals = [];
@@ -120,7 +123,7 @@ function triangulate (face) {
     var vertices = [];
     var first = face[0];
     var second = face[1];
-    for (i = 2; i < face.length; i++) {
+    for (var i = 2; i < face.length; i++) {
       vertices.push(first);
       vertices.push(second);
       vertices.push(face[i]);

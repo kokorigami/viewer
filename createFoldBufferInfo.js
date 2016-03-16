@@ -1,9 +1,14 @@
-var twgl = require('twgl.js');
+var _ = require('underscore')._;
+var createGeometry = require('gl-geometry');
 
 function createFoldBufferInfo (gl, foldsPerLayer) {
   var foldAttributes = getFoldBufferArrays(foldsPerLayer, 1); // mountain
-  var foldBufferInfo = twgl.createBufferInfoFromArrays(gl, foldAttributes);
-  return foldBufferInfo;
+  var geom = createGeometry(gl);
+
+  _.each(foldAttributes, function (val, attribute) {
+    geom.attr(attribute, val, val.numComponents || 3);
+  });
+  return geom;
 }
 
 module.exports = createFoldBufferInfo;
