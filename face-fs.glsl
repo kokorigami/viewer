@@ -7,9 +7,7 @@ varying vec3 v_surfaceToView;
 
 uniform vec4 u_lightColor;
 uniform vec4 u_ambient;
-uniform vec4 u_specular;
 uniform float u_shininess;
-uniform float u_specularFactor;
 //uniform sampler2D u_texture;
 
 vec4 lit(float l ,float h, float m) {

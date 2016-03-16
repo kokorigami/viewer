@@ -114,30 +114,23 @@ Renderer.prototype.getUniforms = function () {
       100
   );
 
-  var viewProjection = m4.multiply([], projection, view);
-  var worldViewProjection = m4.multiply([], viewProjection, this.uniforms.u_world);
-
   this.uniforms.u_near = 1;
   this.uniforms.u_far = 100;
   this.uniforms.u_view = view;
   this.uniforms.u_camera = m4.invert([], view);
-  this.uniforms.u_worldViewProjection = worldViewProjection;
+  this.uniforms.u_worldView = m4.multiply([], view, this.uniforms.u_world);
+  this.uniforms.u_worldViewProjection = m4.multiply([], projection, this.uniforms.u_worldView);
 
   return this.uniforms;
 };
 
 Renderer.prototype.createUniforms = function () {
-  var world = m4.identity([]);
-
   var uniforms = {
     u_lightWorldPos: [-3, 3, -8],
     u_lightColor: [1, 0.9, 0.8, 1],
     u_ambient: [0, 0, 0, 1],
-    u_specular: [1, 1, 0.8, 1],
     u_shininess: 70,
-    u_specularFactor: 0.8,
-    u_worldRotation: world,
-    u_world: world
+    u_world: m4.identity([])
   };
   return uniforms;
 };
