@@ -23,10 +23,6 @@ var Renderer = function (canvas, data) {
   this.shaders.depth = createShader(gl, faceVs, depthnormalFs);
   this.shaders.fold = createShader(gl, foldVs, foldFs);
 
-  // this.faceProgramInfo = twgl.createProgramInfoFromProgram(gl, faceProgram);
-  // this.depthProgramInfo = twgl.createProgramInfoFromProgram(gl, depthProgram);
-  // this.foldProgramInfo = twgl.createProgramInfoFromProgram(gl, foldProgram);
-
   this.camera = createCamera({
     center: [0, 0.5, 0],
     eye: [0, 1, -3],

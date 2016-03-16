@@ -1,6 +1,5 @@
 var _ = require('underscore')._;
-var twgl = require('twgl.js');
-var v3 = twgl.v3;
+var v3 = require('gl-vec3');
 var createGeometry = require('gl-geometry');
 
 function createFaceBufferInfo (gl, facesPerLayer) {
@@ -91,16 +90,16 @@ function getSides (face, thickness, positions, normals) {
 }
 
 function isClockwise (vertices) {
-  var vA = v3.subtract(vertices[1], vertices[0]);
-  var vB = v3.subtract(vertices[2], vertices[0]);
-  var vC = v3.cross(vB, vA);
+  var vA = v3.subtract([], vertices[1], vertices[0]);
+  var vB = v3.subtract([], vertices[2], vertices[0]);
+  var vC = v3.cross([], vB, vA);
   return vC[2] > 0;
 }
 
 function getNormal (face) {
-  var vA = v3.subtract(face[1], face[0]);
-  var vB = v3.subtract(face[1], face[2]);
-  var cross = v3.cross(vA, vB);
+  var vA = v3.subtract([], face[1], face[0]);
+  var vB = v3.subtract([], face[1], face[2]);
+  var cross = v3.cross([], vA, vB);
   v3.normalize(cross, cross);
   return cross;
 }
