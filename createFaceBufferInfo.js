@@ -90,16 +90,14 @@ function getSides (face, thickness, positions, normals) {
 }
 
 function isClockwise (vertices) {
-  var vA = v3.subtract([], vertices[1], vertices[0]);
-  var vB = v3.subtract([], vertices[2], vertices[0]);
-  var vC = v3.cross([], vB, vA);
+  var vC = getNormal(vertices);
   return vC[2] > 0;
 }
 
 function getNormal (face) {
   var vA = v3.subtract([], face[1], face[0]);
-  var vB = v3.subtract([], face[1], face[2]);
-  var cross = v3.cross([], vA, vB);
+  var vB = v3.subtract([], face[2], face[0]);
+  var cross = v3.cross([], vB, vA);
   v3.normalize(cross, cross);
   return cross;
 }

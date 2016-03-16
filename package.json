@@ -12,6 +12,7 @@
     "3d-view": "^2.0.0",
     "browserify": "^12.0.1",
     "chai": "^3.4.1",
+    "gl-context": "^0.1.1",
     "gl-geometry": "^3.1.0",
     "gl-mat4": "^1.1.4",
     "gl-shader": "^4.2.0",
@@ -20,8 +21,7 @@
     "mocha": "^2.3.4",
     "stringify": "^3.2.0",
     "twgl.js": "0.0.38",
-    "underscore": "^1.8.3",
-    "webgl-context": "^2.2.0"
+    "underscore": "^1.8.3"
   },
   "browserify": {
     "transform": [

@@ -1,5 +1,9 @@
-var createCamera = require('3d-view');
+var createContext = require('gl-context');
 var createShader = require('gl-shader');
+var createCamera = require('3d-view');
+
+var createFaceBufferInfo = require('./createFaceBufferInfo.js');
+var createFoldBufferInfo = require('./createFoldBufferInfo.js');
 
 var glslify = require('glslify');
 var faceFs = glslify('./face-fs.glsl');
@@ -8,21 +12,10 @@ var foldFs = glslify('./fold-fs.glsl');
 var foldVs = glslify('./fold-vs.glsl');
 var depthnormalFs = glslify('./depthnormal-fs.glsl');
 
-var twgl = require('twgl.js');
 var m4 = require('gl-mat4');
 
-var createFaceBufferInfo = require('./createFaceBufferInfo.js');
-var createFoldBufferInfo = require('./createFoldBufferInfo.js');
-
 var Renderer = function (canvas, data) {
-  var gl = this.gl = twgl.getWebGLContext(canvas);
   this.render = this.render.bind(this);
-
-  this.shaders = {};
-  this.shaders.face = createShader(gl, faceVs, faceFs);
-  this.shaders.depth = createShader(gl, faceVs, depthnormalFs);
-  this.shaders.fold = createShader(gl, foldVs, foldFs);
-
   this.camera = createCamera({
     center: [0, 0.5, 0],
     eye: [0, 1, -3],
@@ -31,15 +24,25 @@ var Renderer = function (canvas, data) {
     mode: 'orbit'
   });
 
-  this.onMouseDown = getOnMouseDown(gl, this.camera);
+  this.initialize(canvas);
 
-  if (data) {
-    this.data(data);
-  }
+  if (data) this.data(data);
   return this;
 };
 
 module.exports = Renderer;
+
+Renderer.prototype.initialize = function (canvas) {
+  var gl = this.gl = createContext(canvas);
+  gl.enable(gl.DEPTH_TEST);
+
+  this.shaders = {};
+  this.shaders.face = createShader(gl, faceVs, faceFs);
+  this.shaders.depth = createShader(gl, faceVs, depthnormalFs);
+  this.shaders.fold = createShader(gl, foldVs, foldFs);
+
+  this.onMouseDown = getOnMouseDown(gl, this.camera);
+};
 
 Renderer.prototype.data = function (data) {
   var gl = this.gl;
@@ -54,18 +57,15 @@ Renderer.prototype.data = function (data) {
 
 Renderer.prototype.play = function () {
   this.stop();
-  this.gl.enable(this.gl.DEPTH_TEST);
   this.gl.canvas.addEventListener('mousedown', this.onMouseDown);
   this.frame = requestAnimationFrame(this.render);
   return this;
 };
 
 Renderer.prototype.render = function () {
+  this.resize();
   var gl = this.gl;
-
-  twgl.resizeCanvasToDisplaySize(gl.canvas);
   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
   var uniforms = this.getUniforms();
@@ -76,6 +76,20 @@ Renderer.prototype.render = function () {
 
   //renderPoints(points, pointDivs);
   requestAnimationFrame(this.render);
+};
+
+Renderer.prototype.resize = function (resolution) {
+  resolution = resolution || 1;
+  resolution = Math.max(1, resolution);
+  var canvas = this.gl.canvas;
+  var width  = canvas.clientWidth  * resolution | 0;
+  var height = canvas.clientHeight * resolution | 0;
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+    return true;
+  }
+  return false;
 };
 
 Renderer.prototype.getUniforms = function () {
