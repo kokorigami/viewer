@@ -1,13 +1,12 @@
-var _ = require('underscore')._;
 var createGeometry = require('gl-geometry');
 
 function createFoldBufferInfo (gl, foldsPerLayer) {
   var foldAttributes = getFoldBufferArrays(foldsPerLayer, 1); // mountain
-  var geom = createGeometry(gl);
+  var geom = createGeometry(gl)
+    .attr('foldType', foldAttributes.foldType, {size: 1})
+    .attr('lengthSoFar', foldAttributes.lengthSoFar, {size: 1})
+    .attr('position', foldAttributes.position);
 
-  _.each(foldAttributes, function (val, attribute) {
-    geom.attr(attribute, val, val.numComponents || 3);
-  });
   return geom;
 }
 
