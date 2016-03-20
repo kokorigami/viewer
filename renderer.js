@@ -87,11 +87,11 @@ Renderer.prototype.render = function () {
 
 Renderer.prototype.getUniforms = function () {
   var gl = this.gl;
-  var eye = [0, 1, -4];
+  var eye = [0, 0.5, -4];
   var target = [0, 0.5, 0];
   var up = [0, 1, 0];
   var near = 1;
-  var far = 100;
+  var far = 6;
 
   var width = gl.canvas.clientWidth;
   var height = gl.canvas.clientHeight;
