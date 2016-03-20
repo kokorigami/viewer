@@ -1,16 +1,18 @@
 var _ = require('underscore')._;
-var twgl = require('twgl.js');
-var v3 = twgl.v3;
+var v3 = require('gl-vec3');
+var createGeometry = require('gl-geometry');
 
 function createFaceBufferInfo (gl, facesPerLayer) {
-  var faceArributes = getFaceBufferArrays(facesPerLayer);
-  var faceBufferInfo = twgl.createBufferInfoFromArrays(gl, faceArributes);
-  return faceBufferInfo;
+  var faceAttributes = getFaceBufferArrays(facesPerLayer);
+  var geom = createGeometry(gl)
+    .attr('position', faceAttributes.position)
+    .attr('normal', faceAttributes.normal);
+  return geom;
 }
 
 module.exports = createFaceBufferInfo;
 
-function getFaceBufferArrays (faces) {
+function getFaceBufferArrays (layers) {
   var thickness = 0.005;
   var positions = [];
   var normals = [];
@@ -88,16 +90,14 @@ function getSides (face, thickness, positions, normals) {
 }
 
 function isClockwise (vertices) {
-  var vA = v3.subtract(vertices[1], vertices[0]);
-  var vB = v3.subtract(vertices[2], vertices[0]);
-  var vC = v3.cross(vB, vA);
+  var vC = getNormal(vertices);
   return vC[2] > 0;
 }
 
 function getNormal (face) {
-  var vA = v3.subtract(face[1], face[0]);
-  var vB = v3.subtract(face[1], face[2]);
-  var cross = v3.cross(vA, vB);
+  var vA = v3.subtract([], face[1], face[0]);
+  var vB = v3.subtract([], face[2], face[0]);
+  var cross = v3.cross([], vB, vA);
   v3.normalize(cross, cross);
   return cross;
 }
@@ -120,7 +120,7 @@ function triangulate (face) {
     var vertices = [];
     var first = face[0];
     var second = face[1];
-    for (i = 2; i < face.length; i++) {
+    for (var i = 2; i < face.length; i++) {
       vertices.push(first);
       vertices.push(second);
       vertices.push(face[i]);

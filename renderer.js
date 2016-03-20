@@ -1,3 +1,10 @@
+var createContext = require('gl-context');
+var createShader = require('gl-shader');
+var createCamera = require('3d-view');
+
+var createFaceBufferInfo = require('./createFaceBufferInfo.js');
+var createFoldBufferInfo = require('./createFoldBufferInfo.js');
+
 var glslify = require('glslify');
 var faceFs = glslify('./face-fs.glsl');
 var faceVs = glslify('./face-vs.glsl');
@@ -5,41 +12,43 @@ var foldFs = glslify('./fold-fs.glsl');
 var foldVs = glslify('./fold-vs.glsl');
 var depthnormalFs = glslify('./depthnormal-fs.glsl');
 
-var _ = require('underscore')._;
-var twgl = require('twgl.js');
-var v3 = twgl.v3;
-var m4 = twgl.m4;
-
-var createFaceBufferInfo = require('./createFaceBufferInfo.js');
-var createFoldBufferInfo = require('./createFoldBufferInfo.js');
+var m4 = require('gl-mat4');
 
 var Renderer = function (canvas, data) {
-  var gl = this.gl = twgl.getWebGLContext(canvas);
   this.render = this.render.bind(this);
+  this.camera = createCamera({
+    center: [0, 0.5, 0],
+    eye: [0, 1, -3],
+    distanceLimits: [1, 100],
+    up: [0, 0, 1],
+    mode: 'orbit'
+  });
 
-  var faceProgram = twgl.createProgramFromSources(gl, [faceVs, faceFs]);
-  var depthProgram = twgl.createProgramFromSources(gl, [faceVs, depthnormalFs]);
-  var foldProgram = twgl.createProgramFromSources(gl, [foldVs, foldFs]);
+  this.initialize(canvas);
 
-  this.faceProgramInfo = twgl.createProgramInfoFromProgram(gl, faceProgram);
-  this.depthProgramInfo = twgl.createProgramInfoFromProgram(gl, depthProgram);
-  this.foldProgramInfo = twgl.createProgramInfoFromProgram(gl, foldProgram);
-
-  this.rotation = [0, 0];
-  this.onMouseDown = getOnMouseDown(this.rotation);
-  if (data) {
-    this.data(data);
-  }
+  if (data) this.data(data);
   return this;
 };
 
 module.exports = Renderer;
 
+Renderer.prototype.initialize = function (canvas) {
+  var gl = this.gl = createContext(canvas);
+  gl.enable(gl.DEPTH_TEST);
+
+  this.shaders = {};
+  this.shaders.face = createShader(gl, faceVs, faceFs);
+  this.shaders.depth = createShader(gl, faceVs, depthnormalFs);
+  this.shaders.fold = createShader(gl, foldVs, foldFs);
+
+  this.onMouseDown = getOnMouseDown(gl, this.camera);
+};
+
 Renderer.prototype.data = function (data) {
   var gl = this.gl;
   var facesPerLayer = data.layers;
   var foldsPerLayer = data.folds;
-  var points = data.points;
+  // var points = data.points;
 
   this.faceBufferInfo = createFaceBufferInfo(gl, facesPerLayer);
   this.foldBufferInfo = createFoldBufferInfo(gl, foldsPerLayer);
@@ -47,124 +56,120 @@ Renderer.prototype.data = function (data) {
 };
 
 Renderer.prototype.play = function () {
-  // Setup listeners
   this.stop();
   this.gl.canvas.addEventListener('mousedown', this.onMouseDown);
   this.frame = requestAnimationFrame(this.render);
   return this;
 };
 
-Renderer.prototype.render = function (time) {
+Renderer.prototype.render = function () {
+  this.resize();
   var gl = this.gl;
-  twgl.resizeCanvasToDisplaySize(gl.canvas);
   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  gl.enable(gl.DEPTH_TEST);
 
   var uniforms = this.getUniforms();
 
   //renderPass(gl, depthProgramInfo, faceBufferInfo, uniforms, 'TRIANGLES');
-  renderPass(gl, this.faceProgramInfo, this.faceBufferInfo, uniforms, 'TRIANGLES');
-  renderPass(gl, this.foldProgramInfo, this.foldBufferInfo, uniforms, 'LINES');
+  renderPass(gl, this.shaders.face, this.faceBufferInfo, uniforms, 'TRIANGLES');
+  renderPass(gl, this.shaders.fold, this.foldBufferInfo, uniforms, 'LINES');
 
   //renderPoints(points, pointDivs);
   requestAnimationFrame(this.render);
 };
 
+Renderer.prototype.resize = function (resolution) {
+  resolution = resolution || 1;
+  resolution = Math.max(1, resolution);
+  var canvas = this.gl.canvas;
+  var width  = canvas.clientWidth  * resolution | 0;
+  var height = canvas.clientHeight * resolution | 0;
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+    return true;
+  }
+  return false;
+};
+
 Renderer.prototype.getUniforms = function () {
   if (!this.uniforms) {
     this.uniforms = this.createUniforms();
-  } else {
-    var rotateX = twgl.m4.rotationX(this.rotation[0]);
-    var rotateY = twgl.m4.rotationY(this.rotation[1]);
-    var world = twgl.m4.multiply(rotateX, rotateY);
-
-    var worldView = twgl.m4.multiply(world, this.uniforms.u_view);
-    var worldViewProjection = twgl.m4.multiply(world, this.uniforms.u_viewProjection);
-
-    this.uniforms.u_world = world;
-    this.uniforms.u_worldRotation = world;
-    this.uniforms.u_worldViewProjection = worldViewProjection;
   }
+  var gl = this.gl;
+  var t = Date.now();
+  var camera = this.camera;
+
+  camera.idle(t - 20);
+  camera.flush(t - 100);
+  camera.recalcMatrix(t - 25);
+
+  // Update camera uniforms.
+  var view = camera.computedMatrix;
+  var projection = m4.perspective(
+      [],
+      Math.PI/4.0,
+      gl.drawingBufferWidth/gl.drawingBufferHeight,
+      1,
+      100
+  );
+
+  this.uniforms.u_near = 1;
+  this.uniforms.u_far = 100;
+  this.uniforms.u_view = view;
+  this.uniforms.u_camera = m4.invert([], view);
+  this.uniforms.u_worldView = m4.multiply([], view, this.uniforms.u_world);
+  this.uniforms.u_worldViewProjection = m4.multiply([], projection, this.uniforms.u_worldView);
+
   return this.uniforms;
 };
 
 Renderer.prototype.createUniforms = function () {
-  var gl = this.gl;
-  var eye = [0, 1, -4];
-  var target = [0, 0.5, 0];
-  var up = [0, 1, 0];
-  var near = 1;
-  var far = 100;
-
-  var projection = m4.perspective(30 * Math.PI / 180, gl.canvas.clientWidth / gl.canvas.clientHeight, near, far);
-  var camera = m4.lookAt(eye, target, up);
-  var view = m4.inverse(camera);
-  var viewProjection = m4.multiply(view, projection);
-
-  var rotateX = m4.rotationX(this.rotation[0]);
-  var rotateY = m4.rotationY(this.rotation[1]);
-  var world = m4.multiply(rotateX, rotateY);
-
-  var worldView = m4.multiply(world, view);
-  var worldViewProjection = m4.multiply(world, viewProjection);
-
   var uniforms = {
-    u_near: near,
-    u_far: far,
     u_lightWorldPos: [-3, 3, -8],
     u_lightColor: [1, 0.9, 0.8, 1],
     u_ambient: [0, 0, 0, 1],
-    u_specular: [1, 1, 0.8, 1],
     u_shininess: 70,
-    u_specularFactor: 0.8,
-    u_camera: camera,
-    u_view: view,
-    u_viewProjection: viewProjection,
-    u_worldViewProjection: worldViewProjection,
-    u_worldRotation: world,
-    u_world: world
+    u_world: m4.identity([])
   };
   return uniforms;
 };
 
 Renderer.prototype.stop = function () {
-  // TODO: remove listeners animation frames
   cancelAnimationFrame(this.frame);
   this.gl.canvas.removeEventListener('mousedown', this.onMouseDown);
   return this;
 };
 
-//var pointDivs = createPointDivs(points);
-
-function renderPass (gl, programInfo, bufferInfo, uniforms, drawType) {
-  gl.useProgram(programInfo.program);
-  twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo);
-  twgl.setUniforms(programInfo, uniforms);
-  twgl.drawBufferInfo(gl, gl[drawType], bufferInfo);
+function renderPass (gl, shader, geom, uniforms, drawType) {
+  shader.bind();
+  shader.uniforms = uniforms;
+  geom.bind(shader);
+  geom.draw(gl[drawType]);
+  geom.unbind();
 }
 
-function getOnMouseDown (rotation) {
-  var onMouseDown = function (e) {
-    var canvas = e.currentTarget;
+function getOnMouseDown (gl, camera) {
+  var onMouseDown = function (ev) {
+    var canvas = ev.currentTarget;
     canvas.addEventListener('mousemove', onMouseMove);
     canvas.addEventListener('mouseup', onMouseUp);
 
-    var startX = e.offsetX;
-    var startY = e.offsetY;
+    var startX = ev.offsetX;
+    var startY = ev.offsetY;
     var currentX = startX;
     var currentY = startY;
 
-    function onMouseMove (e) {
-      var nextX = e.offsetX;
-      var nextY = e.offsetY;
-      pan(rotation, nextX - currentX, nextY - currentY, canvas);
-      currentX = nextX;
-      currentY = nextY;
+    function onMouseMove (mev) {
+      var dx = (mev.offsetX - currentX) * 4/ gl.drawingBufferWidth;
+      var dy = (mev.offsetY - currentY) * 4/ gl.drawingBufferHeight;
+
+      camera.rotate(Date.now(), -dx, dy);
+      currentX = mev.offsetX;
+      currentY = mev.offsetY;
     }
 
-    function onMouseUp (e) {
+    function onMouseUp () {
       canvas.removeEventListener('mousemove', onMouseMove);
       canvas.removeEventListener('mouseup', onMouseUp);
     }
@@ -172,47 +177,43 @@ function getOnMouseDown (rotation) {
   return onMouseDown;
 }
 
-function pan (rotation, dX, dY, canvas) {
-  rotation[0] += 10 * dY / canvas.clientHeight;
-  rotation[1] += 10 * dX / canvas.clientWidth;
-  return rotation;
-}
+// var pointDivs = createPointDivs(points);
 
-function toPixelClipSpace (gl, point) {
-  var pixel = [];
-  pixel[0] = (point[0] *  0.5 + 0.5) * gl.canvas.width;
-  pixel[1] = (point[1] * -0.5 + 0.5) * gl.canvas.height;
-  return pixel;
-}
+// function toPixelClipSpace (gl, point) {
+//   var pixel = [];
+//   pixel[0] = (point[0] *  0.5 + 0.5) * gl.canvas.width;
+//   pixel[1] = (point[1] * -0.5 + 0.5) * gl.canvas.height;
+//   return pixel;
+// }
 
-function createPointDivs (points) {
-  return _.map(points, createPoint);
-}
+// function createPointDivs (points) {
+//   return _.map(points, createPoint);
+// }
 
-function renderPoints(points, divs) {
-  _.each(points, function (point, i) {
-    renderPoint(point, divs[i]);
-  });
-}
+// function renderPoints(points, divs) {
+//   _.each(points, function (point, i) {
+//     renderPoint(point, divs[i]);
+//   });
+// }
 
-function createPoint (point, id) {
-  var pointDiv = document.createElement('div');
-  pointDiv.classList.add('floating');
-  pointDiv.textContent = id;
-  document.body.appendChild(pointDiv);
-  return pointDiv;
-}
+// function createPoint (point, id) {
+//   var pointDiv = document.createElement('div');
+//   pointDiv.classList.add('floating');
+//   pointDiv.textContent = id;
+//   document.body.appendChild(pointDiv);
+//   return pointDiv;
+// }
 
-function renderPoint (point, div) {
-  var adjustedPoint = twgl.v3.create();
-  adjustedPoint[0] = point[0];
-  adjustedPoint[1] = point[1];
-  adjustedPoint[2] = point[2];
+// function renderPoint (point, div) {
+//   var adjustedPoint = twgl.v3.create();
+//   adjustedPoint[0] = point[0];
+//   adjustedPoint[1] = point[1];
+//   adjustedPoint[2] = point[2];
 
-  twgl.m4.transformPoint(worldViewProjection, adjustedPoint, adjustedPoint);
+//   twgl.m4.transformPoint(worldViewProjection, adjustedPoint, adjustedPoint);
 
-  var pixelPoint = toPixelClipSpace(gl, adjustedPoint);
+//   var pixelPoint = toPixelClipSpace(gl, adjustedPoint);
 
-  div.style.left = Math.floor(pixelPoint[0]) + 'px';
-  div.style.top = Math.floor(pixelPoint[1]) + 'px';
-}
+//   div.style.left = Math.floor(pixelPoint[0]) + 'px';
+//   div.style.top = Math.floor(pixelPoint[1]) + 'px';
+// }
