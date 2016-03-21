@@ -105,7 +105,6 @@ Renderer.prototype.getUniforms = function () {
   camera.recalcMatrix(t - 25);
 
   // Update camera uniforms.
-  var view = camera.computedMatrix;
   var projection = m4.perspective(
       [],
       Math.PI/4.0,
@@ -116,9 +115,10 @@ Renderer.prototype.getUniforms = function () {
 
   this.uniforms.u_near = 1;
   this.uniforms.u_far = 100;
-  this.uniforms.u_view = view;
-  this.uniforms.u_camera = m4.invert([], view);
-  this.uniforms.u_worldView = m4.multiply([], view, this.uniforms.u_world);
+  this.uniforms.u_view = m4.identity([]);
+  this.uniforms.u_camera = m4.invert([], this.uniforms.u_view);
+  this.uniforms.u_world = camera.computedMatrix;
+  this.uniforms.u_worldView = m4.multiply([], this.uniforms.u_view, this.uniforms.u_world);
   this.uniforms.u_worldViewProjection = m4.multiply([], projection, this.uniforms.u_worldView);
 
   return this.uniforms;
@@ -126,11 +126,10 @@ Renderer.prototype.getUniforms = function () {
 
 Renderer.prototype.createUniforms = function () {
   var uniforms = {
-    u_lightWorldPos: [-3, 3, -8],
+    u_lightWorldPos: [0, 0, 6],
     u_lightColor: [1, 0.9, 0.8, 1],
     u_ambient: [0, 0, 0, 1],
-    u_shininess: 70,
-    u_world: m4.identity([])
+    u_shininess: 70
   };
   return uniforms;
 };
