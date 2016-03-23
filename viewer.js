@@ -3,7 +3,7 @@ var Renderer = require('./renderer.js');
 
 var viewerHtml = require('./viewer.html');
 
-var Viewer = Component('kokorigami-viewer', HTMLElement, {
+var Viewer = Component('kokorigami-viewer', {
   _: {
     writable: false,
     enumerable: false,
@@ -12,7 +12,7 @@ var Viewer = Component('kokorigami-viewer', HTMLElement, {
       renderer: null
     }
   },
-  data: 'data',
+  data: null,
   createdCallback: function () {
     this._.shadow = this.createShadowRoot();
     this._.shadow.innerHTML = viewerHtml;

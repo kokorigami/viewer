@@ -2,20 +2,24 @@
   "name": "kokorigami-viewer",
   "version": "0.0.0",
   "description": "Origami viewer for kokorigami.",
-  "main": "main.js",
+  "main": "viewer.js",
   "scripts": {
     "test": "mocha",
-    "prepublish": "browserify viewer.js > main.js -s KokorigamiViewer"
+    "prepublish": "browserify viewer.js > example/main.js -s KokorigamiViewer"
   },
   "author": "",
-  "license": "ISC",
   "dependencies": {
+    "3d-view": "^2.0.0",
     "browserify": "^12.0.1",
     "chai": "^3.4.1",
+    "gl-context": "^0.1.1",
+    "gl-geometry": "^3.1.0",
+    "gl-mat4": "^1.1.4",
+    "gl-shader": "^4.2.0",
+    "gl-vec3": "^1.0.3",
     "glslify": "^4.0.0",
     "mocha": "^2.3.4",
     "stringify": "^3.2.0",
-    "twgl.js": "0.0.38",
     "underscore": "^1.8.3"
   },
   "browserify": {

@@ -1,9 +1,13 @@
-var twgl = require('twgl.js');
+var createGeometry = require('gl-geometry');
 
 function createFoldBufferInfo (gl, foldsPerLayer) {
   var foldAttributes = getFoldBufferArrays(foldsPerLayer, 1); // mountain
-  var foldBufferInfo = twgl.createBufferInfoFromArrays(gl, foldAttributes);
-  return foldBufferInfo;
+  var geom = createGeometry(gl)
+    .attr('foldType', foldAttributes.foldType, {size: 1})
+    .attr('lengthSoFar', foldAttributes.lengthSoFar, {size: 1})
+    .attr('position', foldAttributes.position);
+
+  return geom;
 }
 
 module.exports = createFoldBufferInfo;
