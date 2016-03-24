@@ -3,9 +3,10 @@ var createShader = require('gl-shader');
 var createFBO = require('gl-fbo');
 var createCamera = require('3d-view');
 
+var drawTriangle = require("a-big-triangle");
+
 var createFaceBufferInfo = require('./createFaceBufferInfo.js');
 var createFoldBufferInfo = require('./createFoldBufferInfo.js');
-var createQuadBufferInfo = require('./createQuadBufferInfo.js');
 
 var glslify = require('glslify');
 var faceFs = glslify('./face-fs.glsl');
@@ -18,12 +19,15 @@ var ssaoVs = glslify('./ssao-vs.glsl');
 
 var m4 = require('gl-mat4');
 
+var NEAR = -2;
+var FAR = 5;
+
 var Renderer = function (canvas, data) {
   this.render = this.render.bind(this);
   this.camera = createCamera({
     center: [0, 0.5, 0],
     eye: [0, 1, -3],
-    distanceLimits: [1, 100],
+    distanceLimits: [NEAR, FAR],
     up: [0, 0, 1],
     mode: 'orbit'
   });
@@ -46,11 +50,9 @@ Renderer.prototype.initialize = function (canvas) {
   this.shaders.fold = createShader(gl, foldVs, foldFs);
   this.shaders.ssao = createShader(gl, ssaoVs, ssaoFs);
 
-  this.fbo = createFBO(gl, [0, 0]);
+  this.fbo = createFBO(gl, [canvas.width, canvas.height]);
 
   this.onMouseDown = getOnMouseDown(gl, this.camera);
-
-  this.planeBufferInfo = createQuadBufferInfo(gl);
 };
 
 Renderer.prototype.teardown = function () {
@@ -87,15 +89,15 @@ Renderer.prototype.render = function () {
   var gl = this.gl;
 
   var uniforms = this.getUniforms();
-  var fbo = this.getFramebuffer();
-
-  this.bindFramebuffer(fbo);
-  renderPass(gl, this.shaders.depth, this.faceBufferInfo, uniforms, 'TRIANGLES');
 
   this.bindFramebuffer(null);
-  renderPass(gl, this.shaders.ssao, this.planeBufferInfo, uniforms, 'TRIANGLES');
-  // renderPass(gl, this.shaders.face, this.faceBufferInfo, uniforms, 'TRIANGLES');
-  // renderPass(gl, this.shaders.fold, this.foldBufferInfo, uniforms, 'LINES');
+  //this.bindFramebuffer(this.fbo);
+  renderPass(gl, this.shaders.depth, this.faceBufferInfo, uniforms, 'TRIANGLES');
+
+  //this.bindFramebuffer(null);
+  //renderPass(gl, this.shaders.ssao, null, uniforms, 'TRIANGLES');
+  //renderPass(gl, this.shaders.face, this.faceBufferInfo, uniforms, 'TRIANGLES');
+  //renderPass(gl, this.shaders.fold, this.foldBufferInfo, uniforms, 'LINES');
 
   //renderPoints(points, pointDivs);
   requestAnimationFrame(this.render);
@@ -104,22 +106,26 @@ Renderer.prototype.render = function () {
 Renderer.prototype.resize = function (resolution) {
   resolution = resolution || 1;
   resolution = Math.max(1, resolution);
-  var canvas = this.gl.canvas;
+  var gl = this.gl;
+  var canvas = gl.canvas;
   var width  = canvas.clientWidth  * resolution | 0;
   var height = canvas.clientHeight * resolution | 0;
   if (canvas.width !== width || canvas.height !== height) {
     canvas.width = width;
     canvas.height = height;
-    return true;
   }
-
-  this.fbo.shape = [width, height];
-  return false;
+  this.fbo.shape = [gl.canvas.width, gl.canvas.height];
+  gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 };
 
 Renderer.prototype.getUniforms = function () {
   if (!this.uniforms) {
-    this.uniforms = this.createUniforms();
+    this.uniforms = {
+      u_lightWorldPos: [0, 0, 6],
+      u_lightColor: [1, 0.9, 0.8, 1],
+      u_ambient: [0, 0, 0, 1],
+      u_shininess: 70
+    };
   }
   var gl = this.gl;
   var t = Date.now();
@@ -130,46 +136,40 @@ Renderer.prototype.getUniforms = function () {
   camera.recalcMatrix(t - 25);
 
   // Update camera uniforms.
-  var view = camera.computedMatrix;
+  var world = camera.computedMatrix;
+  var view = m4.identity([]);
   var projection = m4.perspective(
       [],
       Math.PI/4.0,
       gl.drawingBufferWidth/gl.drawingBufferHeight,
-      1, 5
+      1, FAR // TODO: figure out what perspective takes as input
   );
 
   var width = gl.drawingBufferWidth;
   var height = gl.drawingBufferHeight;
 
   this.uniforms.u_screen = [width, height];
-  this.uniforms.u_near = 1;
-  this.uniforms.u_far = 5;
-  this.uniforms.u_view = view;
+  this.uniforms.u_near = NEAR;
+  this.uniforms.u_far = FAR;
   this.uniforms.u_camera = m4.invert([], view);
-  this.uniforms.u_worldView = m4.multiply([], view, this.uniforms.u_world);
+  this.uniforms.u_world = world;
+  this.uniforms.u_view = view;
+  this.uniforms.u_projection = projection;
+  this.uniforms.u_worldView = m4.multiply([], view, world);
   this.uniforms.u_worldViewProjection = m4.multiply([], projection, this.uniforms.u_worldView);
 
   return this.uniforms;
 };
 
-Renderer.prototype.createUniforms = function () {
-  var uniforms = {
-    u_lightWorldPos: [-3, 3, -8],
-    u_lightColor: [1, 0.9, 0.8, 1],
-    u_ambient: [0, 0, 0, 1],
-    u_shininess: 70,
-    u_world: m4.identity([])
-  };
-  return uniforms;
-};
-
 Renderer.prototype.bindFramebuffer = function (fbo) {
   var gl = this.gl;
 
-  if (fbo) fbo.bind();
-  else gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  if (fbo) {
+    fbo.bind();
+  } else {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
 
-  gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 };
 
@@ -182,9 +182,13 @@ Renderer.prototype.stop = function () {
 function renderPass (gl, shader, geom, uniforms, drawType) {
   shader.bind();
   shader.uniforms = uniforms;
-  geom.bind(shader);
-  geom.draw(gl[drawType]);
-  geom.unbind();
+  if (geom) {
+    geom.bind(shader);
+    geom.draw(gl[drawType]);
+    geom.unbind();
+  } else {
+    drawTriangle(gl);
+  }
 }
 
 function getOnMouseDown (gl, camera) {

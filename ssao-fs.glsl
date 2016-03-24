@@ -1,6 +1,6 @@
 precision mediump float;
 
-varying vec3 v_position;
+varying vec2 v_position;
 varying vec2 v_texcoord;
 
 uniform sampler2D u_sampler;
@@ -65,6 +65,7 @@ float read_AO (vec2 texcoord) {
 
 void main() {
   float AO = read_AO(v_texcoord);
-  gl_FragColor = vec4(AO, AO, AO, 1.0);
+  //gl_FragColor = vec4(AO, AO, AO, 1.0);
   //gl_FragColor = texture2D(u_sampler, v_texcoord);
+  gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
 }
