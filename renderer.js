@@ -14,7 +14,7 @@ var depthnormalFs = glslify('./depthnormal-fs.glsl');
 
 var m4 = require('gl-mat4');
 
-var Renderer = function (canvas, data) {
+var Renderer = function (canvas) {
   this.render = this.render.bind(this);
   this.camera = createCamera({
     center: [0, 0.5, 0],
@@ -25,8 +25,6 @@ var Renderer = function (canvas, data) {
   });
 
   this.initialize(canvas);
-
-  if (data) this.data(data);
   return this;
 };
 

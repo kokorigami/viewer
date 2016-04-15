@@ -1,6 +1,5 @@
 <!doctype html>
 <head>
-  <script src="./webcomponents.js"></script>
   <script src="./main.js"></script>
 </head>
 <body>
@@ -61,8 +60,8 @@
       points: points
     };
 
-    var viewer = document.createElement('kokorigami-viewer');
-    document.body.appendChild(viewer);
+    var viewer = new KokorigamiViewer();
+    document.body.appendChild(viewer.el);
     viewer.data = data;
   </script>
 </body>
