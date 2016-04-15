@@ -1,30 +1,27 @@
-var Component = require('./component.js');
 var Renderer = require('./renderer.js');
+var viewerHTML = require('./viewer.html');
 
-var viewerHtml = require('./viewer.html');
+var Viewer = function (el) {
+  this.el = el || document.createElement('div');
+  this.el.innerHTML = viewerHTML;
 
-var Viewer = Component('kokorigami-viewer', {
-  _: {
-    writable: false,
-    enumerable: false,
-    value: {
-      shadow: null,
-      renderer: null
-    }
+  var canvas = this.el.querySelector('canvas');
+  this.renderer = new Renderer(canvas);
+  return this;
+};
+
+Viewer.prototype = {};
+
+Object.defineProperty(Viewer.prototype, 'data', {
+  enumerable: true,
+  set: function (data) {
+    this.renderer.data(data);
+    this.renderer.play();
+    return this._data = data;
   },
-  data: null,
-  createdCallback: function () {
-    this._.shadow = this.createShadowRoot();
-    this._.shadow.innerHTML = viewerHtml;
 
-    var canvas = this._.shadow.querySelector('canvas');
-    this._.renderer = new Renderer(canvas, this.data);
-    return;
-  },
-  attributeChangedCallback: function () {
-    this._.renderer.data(this.data);
-    this._.renderer.play();
-    return;
+  get: function () {
+    return this._data;
   }
 });
 
