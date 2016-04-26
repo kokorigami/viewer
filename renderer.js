@@ -1,9 +1,7 @@
 var createContext = require('gl-context');
 var createShader = require('gl-shader');
+var createGeometry = require('gl-geometry');
 var createCamera = require('3d-view');
-
-var createFaceBufferInfo = require('./createFaceBufferInfo.js');
-var createFoldBufferInfo = require('./createFoldBufferInfo.js');
 
 var glslify = require('glslify');
 var faceFs = glslify('./face-fs.glsl');
@@ -43,13 +41,10 @@ Renderer.prototype.initialize = function (canvas) {
 };
 
 Renderer.prototype.data = function (data) {
-  var gl = this.gl;
-  var facesPerLayer = data.layers;
-  var foldsPerLayer = data.folds;
-  // var points = data.points;
-
-  this.faceBufferInfo = createFaceBufferInfo(gl, facesPerLayer);
-  this.foldBufferInfo = createFoldBufferInfo(gl, foldsPerLayer);
+  this.faceBufferInfo = createGeometry(this.gl)
+    .attr('position', data.position)
+    .attr('normal', data.normal)
+    .attr('texcoord', data.texcoord);
   return this;
 };
 
@@ -70,7 +65,7 @@ Renderer.prototype.render = function () {
 
   //renderPass(gl, depthProgramInfo, faceBufferInfo, uniforms, 'TRIANGLES');
   renderPass(gl, this.shaders.face, this.faceBufferInfo, uniforms, 'TRIANGLES');
-  renderPass(gl, this.shaders.fold, this.foldBufferInfo, uniforms, 'LINES');
+  //renderPass(gl, this.shaders.fold, this.foldBufferInfo, uniforms, 'LINES');
 
   //renderPoints(points, pointDivs);
   requestAnimationFrame(this.render);
