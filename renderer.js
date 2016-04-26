@@ -45,6 +45,13 @@ Renderer.prototype.data = function (data) {
     .attr('position', data.position)
     .attr('normal', data.normal)
     .attr('texcoord', data.texcoord);
+
+  /*
+    for folds, we'll need:
+      foldType (1 float per vertex)
+      lengthSoFar (1 float per vertex)
+      position
+  */
   return this;
 };
 
