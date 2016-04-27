@@ -1,7 +1,5 @@
-var KokorigamiViewer = require('../viewer.js');
+var KokorigamiViewer = require('../src/viewer.js');
 var heartModel = require('./heart.json');
-
-console.log(heartModel);
 
 var viewer = new KokorigamiViewer();
 document.body.appendChild(viewer.el);
