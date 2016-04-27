@@ -22,7 +22,7 @@ Model.prototype.set = function (data) {
   return this;
 };
 
-Model.prototype.frameGeometry = function (gl, frameIndex) {
+Model.prototype.frameGeometry = function (frameIndex) {
   var points = this.frames[frameIndex].points;
   var normals = this.frames[frameIndex].normals;
   var naturals = this.naturals;
