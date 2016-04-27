@@ -5,7 +5,7 @@
   "main": "viewer.js",
   "scripts": {
     "test": "mocha",
-    "prepublish": "browserify viewer.js > example/main.js -s KokorigamiViewer"
+    "prepublish": "browserify example/example.js > example/main.js"
   },
   "author": "",
   "dependencies": {
