@@ -18,8 +18,10 @@ Viewer.prototype = {};
 Object.defineProperty(Viewer.prototype, 'data', {
   enumerable: true,
   set: function (data) {
+    var lastFrame = data.frames.length - 1;
+
     this.model.set(data);
-    this.renderer.data(this.model.frameGeometry(0));
+    this.renderer.data(this.model.frameGeometry(lastFrame));
     this.renderer.play();
     return this.model;
   },
