@@ -1,19 +1,14 @@
 var Renderer = require('./renderer.js');
 var Model = require('./model.js');
-var viewerHTML = require('./viewer.html');
 
 var Viewer = function (el) {
-  this.el = el || document.createElement('div');
-  this.el.innerHTML = viewerHTML;
-
-  var canvas = this.el.querySelector('canvas');
-
+  this.el = el || document.createElement('canvas');
+  this.el.classList.add('kokorigami-viewer');
   this._ = {
     model: new Model(),
     progress: 0,
-    renderer: new Renderer(canvas)
+    renderer: new Renderer(this.el)
   };
-
   return this;
 };
 
