@@ -9,7 +9,7 @@ var Viewer = function (el) {
   var canvas = this.el.querySelector('canvas');
 
   this._ = {
-    model: new Model,
+    model: new Model(),
     progress: 0,
     renderer: new Renderer(canvas)
   };
