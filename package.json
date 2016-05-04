@@ -18,7 +18,6 @@
     "gl-shader": "^4.2.0",
     "gl-vec3": "^1.0.3",
     "glslify": "^4.0.0",
-    "kefir": "^3.2.2",
     "mocha": "^2.3.4",
     "stringify": "^3.2.0",
     "underscore": "^1.8.3"

@@ -1,24 +1,18 @@
 var Renderer = require('./renderer.js');
 var Model = require('./model.js');
 var viewerHTML = require('./viewer.html');
-var Kefir = require('kefir');
 
 var Viewer = function (el) {
   this.el = el || document.createElement('div');
   this.el.innerHTML = viewerHTML;
 
   var canvas = this.el.querySelector('canvas');
+
   this._ = {
     model: new Model,
     progress: 0,
-    renderer: new Renderer(canvas),
-    emitter: null
+    renderer: new Renderer(canvas)
   };
-
-  this.stream = Kefir.stream(function (emitter) {
-    this._.emitter = emitter;
-    return;
-  }.bind(this));
 
   return this;
 };
@@ -45,7 +39,6 @@ Object.defineProperty(Viewer.prototype, 'progress', {
     progress = Math.min(progress, this.model.frames.length);
     this._.progress = progress;
     this._.renderer.data(this.model.frameGeometry(progress));
-    this._.emitter.emit(progress);
     return this.progress;
   },
 
