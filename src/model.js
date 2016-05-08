@@ -19,6 +19,7 @@ Model.prototype.set = function (data) {
   this.triangles = data.triangles || [];
   this.naturals = data.naturals || [];
   this.frames = data.frames || [];
+  this.fps = data.fps || 1;
   return this;
 };
 
@@ -31,10 +32,10 @@ Model.prototype.frameGeometry = function (frameIndex) {
   var normal = [];
   var texcoord = [];
 
-  this.triangles.forEach(function (triangle) {
+  this.triangles.forEach(function (triangle, triangleIndex) {
     triangle.forEach(function (pointIndex) {
       position.push(points[pointIndex]);
-      normal.push(normals[pointIndex]);
+      normal.push(normals[triangleIndex]);
       texcoord.push(naturals[pointIndex]);
     });
   });
@@ -45,5 +46,27 @@ Model.prototype.frameGeometry = function (frameIndex) {
     texcoord: texcoord
   };
 };
+
+Model.prototype.stepFrames = function (step) {
+  return [step * this.fps, step * this.fps + this.fps - 1];
+};
+
+Model.prototype.stepFromFrame = function (frame) {
+  return Math.floor(frame / this.fps);
+};
+
+Object.defineProperty(Model.prototype, 'steps', {
+  enumerable: true,
+  get: function () {
+    return this.frames.length / this.fps;
+  }
+});
+
+Object.defineProperty(Model.prototype, 'lastFrame', {
+  enumerable: true,
+  get: function () {
+    return this.frames.length - 1;
+  }
+});
 
 module.exports = Model;
