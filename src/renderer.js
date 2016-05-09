@@ -30,7 +30,7 @@ module.exports = Renderer;
 
 Renderer.prototype.initialize = function (canvas) {
   var gl = this.gl = createContext(canvas);
-  gl.enable(gl.DEPTH_TEST);
+  // gl.enable(gl.DEPTH_TEST);
 
   this.shaders = {};
   this.shaders.face = createShader(gl, faceVs, faceFs);
