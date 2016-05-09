@@ -58,7 +58,7 @@ Renderer.prototype.data = function (data) {
 Renderer.prototype.play = function () {
   this.stop();
   this.gl.canvas.addEventListener('mousedown', this.onMouseDown);
-  this.frame = requestAnimationFrame(this.render);
+  this.raf = requestAnimationFrame(this.render);
   return this;
 };
 
@@ -75,7 +75,7 @@ Renderer.prototype.render = function () {
   //renderPass(gl, this.shaders.fold, this.foldBufferInfo, uniforms, 'LINES');
 
   //renderPoints(points, pointDivs);
-  requestAnimationFrame(this.render);
+  this.raf = requestAnimationFrame(this.render);
 };
 
 Renderer.prototype.resize = function (resolution) {
@@ -135,7 +135,7 @@ Renderer.prototype.createUniforms = function () {
 };
 
 Renderer.prototype.stop = function () {
-  cancelAnimationFrame(this.frame);
+  cancelAnimationFrame(this.raf);
   this.gl.canvas.removeEventListener('mousedown', this.onMouseDown);
   return this;
 };

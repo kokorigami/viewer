@@ -1,11 +1,6 @@
 var Renderer = require('./renderer.js');
 var Model = require('./model.js');
 
-/*
-TODO: think about forward/reverse interactions rather than jumping
-to previous or next steps.
-*/
-
 var Viewer = function (el) {
   this.el = el || document.createElement('canvas');
   this.el.classList.add('kokorigami-viewer');
@@ -49,15 +44,6 @@ Object.defineProperty(Viewer.prototype, 'frame', {
 
 Object.defineProperty(Viewer.prototype, 'step', {
   enumerable: true,
-  set: function (step) {
-    step = Math.max(step, 0);
-    step = Math.min(step, this.model.steps);
-    if (step !== this.step) {
-      this.frame = this.model.stepFrames(step)[0];
-    }
-    return step;
-  },
-
   get: function () {
     return this.model.stepFromFrame(this.frame);
   }
@@ -67,28 +53,21 @@ Viewer.prototype.render = function () {
   this._.renderer.play();
 };
 
-Viewer.prototype.play = function () {
-  this.playTo(this.model.lastFrame);
-};
-
-Viewer.prototype.playStep = function (step) {
-  if (typeof step === 'number' && !isNaN(step)) {
-    this.step = step;
+Viewer.prototype.play = function (frame) {
+  if (typeof frame === 'undefined') {
+    frame = this.model.lastFrame;
   }
-  var frameRange = this.model.stepFrames(this.step);
-  this.playTo(frameRange[1]);
-};
 
-Viewer.prototype.playTo = function (frame) {
   var spf = 1000 / this.model.fps;
   var start, raf;
+  var delta = frame < this.frame ? -1 : 1;
 
   var render = function (timestamp) {
     var currentFrame = this.frame;
     if (!start) start = timestamp;
 
-    if (currentFrame < frame) {
-      if (timestamp - start > spf) this.frame++;
+    if (currentFrame !== frame) {
+      if (timestamp - start > spf) this.frame += delta;
       raf = requestAnimationFrame(render);
     } else {
       cancelAnimationFrame(raf);
@@ -98,11 +77,17 @@ Viewer.prototype.playTo = function (frame) {
 };
 
 Viewer.prototype.next = function () {
-  this.step++;
+  var stepFrames = this.model.stepFrames(this.step);
+  var nextFrames = this.model.stepFrames(this.step + 1);
+  nextFrames = this.frame < stepFrames[1] ? stepFrames : nextFrames;
+  this.play(nextFrames[1]);
 };
 
 Viewer.prototype.prev = function () {
-  this.step--;
+  var stepFrames = this.model.stepFrames(this.step);
+  var prevFrames = this.model.stepFrames(this.step - 1);
+  prevFrames = this.frame > stepFrames[0] ? stepFrames : prevFrames;
+  this.play(prevFrames[0]);
 };
 
 module.exports = Viewer;

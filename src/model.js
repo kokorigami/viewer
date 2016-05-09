@@ -48,6 +48,8 @@ Model.prototype.frameGeometry = function (frameIndex) {
 };
 
 Model.prototype.stepFrames = function (step) {
+  step = Math.max(step, 0);
+  step = Math.min(step, this.steps - 1);
   return [step * this.fps, step * this.fps + this.fps - 1];
 };
 
