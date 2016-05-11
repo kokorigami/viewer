@@ -14,41 +14,6 @@ var Viewer = function (el) {
 
 Viewer.prototype = {};
 
-Object.defineProperty(Viewer.prototype, 'model', {
-  enumerable: true,
-  set: function (data) {
-    this._.model.set(data);
-    this.frame = 0; // reset frame
-    return this.model;
-  },
-
-  get: function () {
-    return this._.model;
-  }
-});
-
-Object.defineProperty(Viewer.prototype, 'frame', {
-  enumerable: true,
-  set: function (frame) {
-    frame = Math.max(frame, 0);
-    frame = Math.min(frame, this.model.lastFrame);
-    this._.frame = frame;
-    this._.renderer.data(this.model.frameGeometry(frame));
-    return frame;
-  },
-
-  get: function () {
-    return this._.frame;
-  }
-});
-
-Object.defineProperty(Viewer.prototype, 'step', {
-  enumerable: true,
-  get: function () {
-    return this.model.stepFromFrame(this.frame);
-  }
-});
-
 Viewer.prototype.render = function () {
   this._.renderer.play();
 };
@@ -88,5 +53,40 @@ Viewer.prototype.prev = function () {
   prevFrames = this.frame > stepFrames[0] ? stepFrames : prevFrames;
   this.play(prevFrames[0]);
 };
+
+Object.defineProperty(Viewer.prototype, 'model', {
+  enumerable: true,
+  set: function (data) {
+    this._.model.set(data);
+    this.frame = 0; // reset frame
+    return this.model;
+  },
+
+  get: function () {
+    return this._.model;
+  }
+});
+
+Object.defineProperty(Viewer.prototype, 'frame', {
+  enumerable: true,
+  set: function (frame) {
+    frame = Math.max(frame, 0);
+    frame = Math.min(frame, this.model.lastFrame);
+    this._.frame = frame;
+    this._.renderer.data(this.model.frameGeometry(frame));
+    return frame;
+  },
+
+  get: function () {
+    return this._.frame;
+  }
+});
+
+Object.defineProperty(Viewer.prototype, 'step', {
+  enumerable: true,
+  get: function () {
+    return this.model.stepFromFrame(this.frame);
+  }
+});
 
 module.exports = Viewer;
