@@ -54,12 +54,13 @@ Viewer.prototype.render = function () {
 };
 
 Viewer.prototype.play = function (frame) {
+  if (this.raf) cancelAnimationFrame(this.raf);
   if (typeof frame === 'undefined') {
     frame = this.model.lastFrame;
   }
 
   var spf = 1000 / this.model.fps;
-  var start, raf;
+  var start;
   var delta = frame < this.frame ? -1 : 1;
 
   var render = function (timestamp) {
@@ -68,12 +69,10 @@ Viewer.prototype.play = function (frame) {
 
     if (currentFrame !== frame) {
       if (timestamp - start > spf) this.frame += delta;
-      raf = requestAnimationFrame(render);
-    } else {
-      cancelAnimationFrame(raf);
+      this.raf = requestAnimationFrame(render);
     }
   }.bind(this);
-  raf = requestAnimationFrame(render);
+  this.raf = requestAnimationFrame(render);
 };
 
 Viewer.prototype.next = function () {
