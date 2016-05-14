@@ -1,5 +1,5 @@
-function openBrowser {
-  if which firefox
+openBrowser() {
+  if which firefox &>/dev/null
   then
     firefox $1
   else
