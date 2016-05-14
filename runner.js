@@ -16,7 +16,8 @@ app.post('/results', function (req, res) {
   res.sendStatus(202);
   var result = req.body;
   if (result.failures) {
-    print(result.failures + ' tests failed.\n', 1)
+    print(result.failures + ' tests failed.\n', 1);
+    process.exit(1);
   }
   else {
     print('All tests passed!\n');
