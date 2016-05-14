@@ -5,7 +5,7 @@
   "main": "viewer.js",
   "scripts": {
     "pretest": "browserify test/bundle.js > test.bundle.js",
-    "test": "(sleep 1; open http://localhost:3000) & node runner.js --timeout=3000",
+    "test": "(sleep 1; ./open.sh http://localhost:3000) & node runner.js --timeout=3000",
     "prepublish": "browserify example/example.js > example/main.js"
   },
   "author": "",
