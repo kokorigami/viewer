@@ -9,5 +9,5 @@ Testing
 -------
 To keep the runner when running tests:
 ```
-npm test --single-run=false
+npm test -- --single-run=false
 ```
