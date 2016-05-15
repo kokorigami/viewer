@@ -4,8 +4,9 @@
   "description": "Origami viewer for kokorigami.",
   "main": "src/viewer.js",
   "scripts": {
-    "pretest": "browserify test/bundle.js > test.bundle.js",
+    "pretest": "node bundle.js; browserify test.bundle.js > test.build.js",
     "test": "karma start",
+    "posttest": "rm test.bundle.js; rm test.build.js",
     "prepublish": "browserify example/example.js > example/main.js"
   },
   "author": "",
