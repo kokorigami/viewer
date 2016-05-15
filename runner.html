@@ -12,20 +12,83 @@
   </script>
   <script src="test.bundle.js"></script>
   <script>
-    var post = function (url, data) {
+    var post = function(url, data, async) {
+      if (async === undefined) async = true;
       var xhr = new XMLHttpRequest();
-      xhr.open('POST', url);
+
+      xhr.open('POST', url, async);
       xhr.setRequestHeader('Content-Type', 'application/json');
       xhr.send(JSON.stringify(data));
       return xhr;
     };
 
-    mocha.run(function (numFailures) {
-      var result = {
-        failures: numFailures
-      };
-      // TODO: send more detailed results
-      post('results', result);
+    // TODO:
+    // * create a list of POST requests to force synchronous
+    // * close off the POST list after end is triggered
+    // * do a better job of generalizing data for posts
+
+    var runner = mocha.run();
+
+    post('start', undefined, false);
+
+    // Mock runner events to server for reporting.
+    runner.on('suite', function(suite) {
+      post('progress', {
+        event: 'suite',
+        stats: runner.stats,
+        data: {
+          title: suite.title
+        }
+      }, false);
+    });
+
+    runner.on('suite end', function() {
+      post('progress', {
+        event: 'suite end',
+        stats: runner.stats
+      }, false);
+    });
+
+    runner.on('pending', function(test) {
+      post('progress', {
+        event: 'pending',
+        stats: runner.stats,
+        data: {
+          title: test.title
+        }
+      }, false);
+    });
+
+    runner.on('pass', function(test) {
+      post('progress', {
+        event: 'pass',
+        stats: runner.stats,
+        data: {
+          title: test.title,
+          speed: test.speed,
+          slow: test.slow(),
+          duration: test.duration
+        }
+      }, false);
+    });
+
+    runner.on('fail', function(test, err) {
+      post('progress', {
+        event: 'fail',
+        stats: runner.stats,
+        data: {
+          title: test.title,
+          fullTitle: test.fullTitle(),
+          speed: test.speed,
+          slow: test.slow(),
+          duration: test.duration
+        },
+        err: err
+      }, false);
+    });
+
+    runner.on('end', function() {
+      post('end', runner.stats, false);
     });
   </script>
 </body>
