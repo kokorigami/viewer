@@ -1,4 +1,6 @@
 
+var v3 = require('gl-vec3');
+
 var Model = function (data) {
   /*
     Expected format:
@@ -21,6 +23,16 @@ Model.prototype.set = function (data) {
   this.frames = data.frames || [];
   this.fps = data.fps || 1;
   return this;
+};
+
+Model.prototype.interpolate = function (start, end, amt) {
+  var points = [];
+  start.forEach(function (pointA, i) {
+    var point = v3.create();
+    v3.lerp(point, pointA, end[i], amt);
+    points.push(point);
+  });
+  return points;
 };
 
 Model.prototype.frameGeometry = function (frameIndex) {
