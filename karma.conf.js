@@ -2,11 +2,13 @@
 module.exports = function(config) {
   config.set({
     basePath: '',
-    frameworks: ['mocha'],
-    files: ['test.build.js'],
+    frameworks: ['browserify', 'mocha'],
+    files: ['test/*.js'],
     exclude: [],
-    preprocessors: {},
-    reporters: ['progress'],
+    preprocessors: {
+      'test/*.js': ['browserify']
+    },
+    reporters: ['mocha'],
     port: 9876,
     colors: true,
     logLevel: config.LOG_INFO,

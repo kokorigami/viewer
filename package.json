@@ -4,9 +4,7 @@
   "description": "Origami viewer for kokorigami.",
   "main": "src/viewer.js",
   "scripts": {
-    "pretest": "node bundle.js; browserify test.bundle.js > test.build.js",
     "test": "karma start",
-    "posttest": "rm test.bundle.js; rm test.build.js",
     "prepublish": "browserify example/example.js > example/main.js"
   },
   "author": "",
@@ -21,9 +19,12 @@
     "gl-vec3": "^1.0.3",
     "glslify": "^4.0.0",
     "karma": "^0.13.22",
+    "karma-browserify": "^5.0.5",
     "karma-firefox-launcher": "^1.0.0",
     "karma-mocha": "^1.0.1",
-    "mocha": "^2.3.4"
+    "karma-mocha-reporter": "^2.0.3",
+    "mocha": "^2.3.4",
+    "watchify": "^3.7.0"
   },
   "browserify": {
     "transform": [
