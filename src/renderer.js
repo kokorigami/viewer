@@ -45,7 +45,7 @@ Renderer.prototype.initialize = function (canvas) {
     this.shaders.fold = createShader(gl, foldVs, foldFs);
   } catch (e) {
     // No WebGL context
-    console.log(e);
+    console.log(e.message);
   }
 };
 
