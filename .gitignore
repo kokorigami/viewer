@@ -1,3 +1,4 @@
 node_modules
 example/main.js
 test.bundle.js
+test.build.js
