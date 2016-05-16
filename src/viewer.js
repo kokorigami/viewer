@@ -8,6 +8,7 @@ var Viewer = function (el) {
   this._model = new Model();
   this._frame = 0;
   this.raf = null;
+  this.controls = null;
 
   this.el.classList.add('kokorigami-viewer');
   return this;
@@ -16,7 +17,7 @@ var Viewer = function (el) {
 Viewer.prototype = {};
 
 Viewer.prototype.render = function () {
-  controls.set(this.el, this.renderer);
+  this.controls = controls.attach(this.el, this.renderer.camera);
   this.renderer.play();
 };
 
@@ -63,7 +64,7 @@ Viewer.prototype.prev = function () {
 Viewer.prototype.destroy = function () {
   this.stop();
   this.renderer.stop();
-  controls.remove(this.el);
+  controls.remove(this.el, this.controls);
 };
 
 Object.defineProperty(Viewer.prototype, 'model', {

@@ -1,11 +1,14 @@
 
-function setControls(el, renderer) {
-  removeControls(el);
-  el.addEventListener('mousedown', controlCamera(renderer.camera));
+function attachControls(el, camera) {
+  var controls = {
+    mousedown: controlCamera(camera)
+  };
+  el.addEventListener('mousedown', controls.mousedown);
+  return controls;
 }
 
-function removeControls(el) {
-  el.removeEventListener('mousedown');
+function removeControls(el, controls) {
+  el.removeEventListener('mousedown', controls.mousedown);
 }
 
 function controlCamera(camera) {
@@ -37,6 +40,6 @@ function controlCamera(camera) {
 }
 
 module.exports = {
-  set: setControls,
+  attach: attachControls,
   remove: removeControls
 };
