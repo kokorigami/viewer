@@ -24,16 +24,19 @@ Viewer.prototype.play = function (frame) {
     frame = this.model.lastFrame;
   }
 
-  var spf = 1000 / this.model.fps;
+  var ANIMATION_TIME = 800;
+  var startFrame = this.frame;
   var start;
-  var delta = frame < this.frame ? -1 : 1;
 
   var render = function (timestamp) {
-    var currentFrame = this.frame;
     if (!start) start = timestamp;
+    var currentFrame = this.frame;
 
     if (currentFrame !== frame) {
-      if (timestamp - start > spf) this.frame += delta;
+      var delta = (timestamp - start) / ANIMATION_TIME;
+      delta = Math.min(delta, 1);
+      delta = Math.max(delta, 0);
+      this.frame = (frame - startFrame) * delta + startFrame;
       this.raf = requestAnimationFrame(render);
     }
   }.bind(this);
