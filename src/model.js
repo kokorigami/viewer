@@ -1,5 +1,5 @@
 
-var v3 = require('gl-vec3');
+var interpolate = require('./interpolate.js');
 
 var Model = function (data) {
   /*
@@ -26,19 +26,15 @@ Model.prototype.set = function (data) {
 };
 
 Model.prototype.frameInterpolate = function (frameIndex) {
-  var points, normals;
-  if (Number.isInteger(frameIndex)) {
-    points = this.frames[frameIndex].points;
-    normals = this.frames[frameIndex].normals;
-  } else {
-    var start = parseInt(frameIndex);
-    var end = start + 1;
-    var amt = frameIndex - start;
-    var startFrames = this.frames[start];
-    var endFrames = this.frames[end];
-    points = interpolateV3(startFrames.points, endFrames.points, amt);
-    normals = interpolateV3(startFrames.normals, endFrames.normals, amt);
-  }
+  if (Number.isInteger(frameIndex)) return this.frames[frameIndex];
+
+  var start = parseInt(frameIndex);
+  var end = start + 1;
+  var amt = frameIndex - start;
+  var startFrames = this.frames[start];
+  var endFrames = this.frames[end];
+  var points = interpolate(startFrames.points, endFrames.points, amt);
+  var normals = interpolate(startFrames.normals, endFrames.normals, amt);
   return {
     points: points,
     normals: normals
@@ -93,14 +89,3 @@ Object.defineProperty(Model.prototype, 'lastFrame', {
 });
 
 module.exports = Model;
-
-function interpolateV3(start, end, amt) {
-  var set = [];
-  start.forEach(function (pointA, i) {
-    var point = v3.create();
-    v3.lerp(point, pointA, end[i], amt);
-    set.push(point);
-  });
-  return set;
-}
-

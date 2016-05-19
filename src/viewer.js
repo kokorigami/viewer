@@ -24,19 +24,20 @@ Viewer.prototype.play = function (frame) {
     frame = this.model.lastFrame;
   }
 
-  var ANIMATION_TIME = 800;
+  var spf = 1000 / this.model.fps;
   var startFrame = this.frame;
+  var animationTime = Math.abs(frame - startFrame) * spf;
   var start;
 
   var render = function (timestamp) {
     if (!start) start = timestamp;
-    var currentFrame = this.frame;
 
-    if (currentFrame !== frame) {
-      var delta = (timestamp - start) / ANIMATION_TIME;
-      delta = Math.min(delta, 1);
-      delta = Math.max(delta, 0);
-      this.frame = (frame - startFrame) * delta + startFrame;
+    var delta = (timestamp - start) / animationTime;
+    delta = Math.min(delta, 1);
+    delta = Math.max(delta, 0);
+    this.frame = (frame - startFrame) * delta + startFrame;
+
+    if (this.frame !== frame) {
       this.raf = requestAnimationFrame(render);
     }
   }.bind(this);
@@ -73,6 +74,7 @@ Object.defineProperty(Viewer.prototype, 'model', {
 Object.defineProperty(Viewer.prototype, 'frame', {
   enumerable: true,
   set: function (frame) {
+    if (typeof frame !== 'number' || isNaN(frame)) return this.frame;
     frame = Math.max(frame, 0);
     frame = Math.min(frame, this.model.lastFrame);
     this._.frame = frame;
