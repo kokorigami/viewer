@@ -1,25 +1,28 @@
 var Renderer = require('./renderer.js');
 var Model = require('./model.js');
+var controls = require('./controls.js');
 
 var Viewer = function (el) {
   this.el = el || document.createElement('canvas');
+  this.renderer = new Renderer(this.el);
+  this._model = new Model();
+  this._frame = 0;
+  this.raf = null;
+  this.controls = null;
+
   this.el.classList.add('kokorigami-viewer');
-  this._ = {
-    model: new Model(),
-    frame: 0,
-    renderer: new Renderer(this.el)
-  };
   return this;
 };
 
 Viewer.prototype = {};
 
 Viewer.prototype.render = function () {
-  this._.renderer.play();
+  this.controls = controls.attach(this.el, this.renderer.camera);
+  this.renderer.play();
 };
 
 Viewer.prototype.play = function (frame) {
-  if (this.raf) cancelAnimationFrame(this.raf);
+  this.stop();
   if (typeof frame === 'undefined') {
     frame = this.model.lastFrame;
   }
@@ -40,6 +43,10 @@ Viewer.prototype.play = function (frame) {
   this.raf = requestAnimationFrame(render);
 };
 
+Viewer.prototype.stop = function () {
+  cancelAnimationFrame(this.raf);
+};
+
 Viewer.prototype.next = function () {
   var stepFrames = this.model.stepFrames(this.step);
   var nextFrames = this.model.stepFrames(this.step + 1);
@@ -54,16 +61,22 @@ Viewer.prototype.prev = function () {
   this.play(prevFrames[0]);
 };
 
+Viewer.prototype.destroy = function () {
+  this.stop();
+  this.renderer.stop();
+  controls.remove(this.el, this.controls);
+};
+
 Object.defineProperty(Viewer.prototype, 'model', {
   enumerable: true,
   set: function (data) {
-    this._.model.set(data);
+    this._model.set(data);
     this.frame = 0; // reset frame
     return this.model;
   },
 
   get: function () {
-    return this._.model;
+    return this._model;
   }
 });
 
@@ -72,13 +85,13 @@ Object.defineProperty(Viewer.prototype, 'frame', {
   set: function (frame) {
     frame = Math.max(frame, 0);
     frame = Math.min(frame, this.model.lastFrame);
-    this._.frame = frame;
-    this._.renderer.data(this.model.frameGeometry(frame));
+    this._frame = frame;
+    this.renderer.data(this.model.frameGeometry(frame));
     return frame;
   },
 
   get: function () {
-    return this._.frame;
+    return this._frame;
   }
 });
 
