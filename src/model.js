@@ -1,4 +1,6 @@
 
+var interpolate = require('./interpolate.js');
+
 var Model = function (data) {
   /*
     Expected format:
@@ -23,10 +25,25 @@ Model.prototype.set = function (data) {
   return this;
 };
 
+Model.prototype.frameInterpolate = function (frameIndex) {
+  if (Number.isInteger(frameIndex)) return this.frames[frameIndex];
+
+  var start = parseInt(frameIndex);
+  var end = start + 1;
+  var amt = frameIndex - start;
+  var startFrames = this.frames[start];
+  var endFrames = this.frames[end];
+  var points = interpolate(startFrames.points, endFrames.points, amt);
+  var normals = interpolate(startFrames.normals, endFrames.normals, amt);
+  return {
+    points: points,
+    normals: normals
+  };
+};
+
 Model.prototype.frameGeometry = function (frameIndex) {
-  var points = this.frames[frameIndex].points;
-  var normals = this.frames[frameIndex].normals;
   var naturals = this.naturals;
+  var frame = this.frameInterpolate(frameIndex);
 
   var position = [];
   var normal = [];
@@ -34,8 +51,8 @@ Model.prototype.frameGeometry = function (frameIndex) {
 
   this.triangles.forEach(function (triangle, triangleIndex) {
     triangle.forEach(function (pointIndex) {
-      position.push(points[pointIndex]);
-      normal.push(normals[triangleIndex]);
+      position.push(frame.points[pointIndex]);
+      normal.push(frame.normals[triangleIndex]);
       texcoord.push(naturals[pointIndex]);
     });
   });
