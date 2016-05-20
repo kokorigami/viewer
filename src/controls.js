@@ -15,7 +15,8 @@ function controlCamera(camera) {
   var onMouseDown = function (ev) {
     var canvas = ev.currentTarget;
     canvas.addEventListener('mousemove', onMouseMove);
-    canvas.addEventListener('mouseup', onMouseUp);
+    canvas.addEventListener('mouseup', stopListening);
+    canvas.addEventListener('mouseleave', stopListening);
 
     var startX = ev.offsetX;
     var startY = ev.offsetY;
@@ -31,9 +32,10 @@ function controlCamera(camera) {
       currentY = mev.offsetY;
     }
 
-    function onMouseUp () {
+    function stopListening () {
       canvas.removeEventListener('mousemove', onMouseMove);
-      canvas.removeEventListener('mouseup', onMouseUp);
+      canvas.removeEventListener('mouseup', stopListening);
+      canvas.removeEventListener('mouseleave', stopListening);
     }
   };
   return onMouseDown;
