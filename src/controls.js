@@ -1,18 +1,21 @@
 
 function attachControls(el, camera) {
   var controls = {
-    mousedown: controlCamera(camera)
+    mousedown: controlCamera(camera),
+    wheel: controlZoom(camera)
   };
+  el.addEventListener('wheel', controls.wheel);
   el.addEventListener('mousedown', controls.mousedown);
   return controls;
 }
 
 function removeControls(el, controls) {
   el.removeEventListener('mousedown', controls.mousedown);
+  el.removeEventListener('wheel', controls.wheel);
 }
 
 function controlCamera(camera) {
-  var onMouseDown = function (ev) {
+  var onMouseDown = function(ev) {
     var canvas = ev.currentTarget;
     canvas.addEventListener('mousemove', onMouseMove);
     canvas.addEventListener('mouseup', stopListening);
@@ -23,7 +26,7 @@ function controlCamera(camera) {
     var currentX = startX;
     var currentY = startY;
 
-    function onMouseMove (mev) {
+    function onMouseMove(mev) {
       var dx = (mev.offsetX - currentX) * 4/ canvas.width;
       var dy = (mev.offsetY - currentY) * 4/ canvas.height;
 
@@ -32,13 +35,20 @@ function controlCamera(camera) {
       currentY = mev.offsetY;
     }
 
-    function stopListening () {
+    function stopListening() {
       canvas.removeEventListener('mousemove', onMouseMove);
       canvas.removeEventListener('mouseup', stopListening);
       canvas.removeEventListener('mouseleave', stopListening);
     }
   };
   return onMouseDown;
+}
+
+function controlZoom(camera) {
+  var onWheel = function (e) {
+    camera.pan(Date.now(), 0, 0, e.deltaY / 50);
+  };
+  return onWheel;
 }
 
 module.exports = {
