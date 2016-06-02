@@ -1,14 +1,17 @@
 
 function attachControls(el, camera) {
   var controls = {
-    mousedown: controlCamera(camera)
+    mousedown: controlCamera(camera),
+    wheel: controlZoom(camera)
   };
+  el.addEventListener('wheel', controls.wheel);
   el.addEventListener('mousedown', controls.mousedown);
   return controls;
 }
 
 function removeControls(el, controls) {
   el.removeEventListener('mousedown', controls.mousedown);
+  el.removeEventListener('wheel', controls.wheel);
 }
 
 function controlCamera(camera) {
@@ -39,6 +42,13 @@ function controlCamera(camera) {
     }
   };
   return onMouseDown;
+}
+
+function controlZoom(camera) {
+  var onWheel = function (e) {
+    camera.pan(Date.now(), 0, 0, e.deltaY / 20);
+  };
+  return onWheel;
 }
 
 module.exports = {

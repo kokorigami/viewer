@@ -18,9 +18,9 @@ var Renderer = function (canvas) {
   this.raf = null;
   this.render = this.render.bind(this);
   this.camera = createCamera({
-    center: [0, 0.5, 0],
+    center: [0.5, 0.5, 0],
     eye: [0, 1, -3],
-    distanceLimits: [1, 100],
+    distanceLimits: [1, 6],
     up: [0, 0, 1],
     mode: 'orbit'
   });
@@ -129,12 +129,12 @@ function updateUniforms(gl, camera, uniforms) {
       [],
       Math.PI/4.0,
       gl.drawingBufferWidth/gl.drawingBufferHeight,
-      1,
-      100
+      0,
+      10
   );
 
-  uniforms.u_near = 1;
-  uniforms.u_far = 100;
+  uniforms.u_near = 0;
+  uniforms.u_far = 10;
   uniforms.u_view = m4.identity([]);
   uniforms.u_camera = m4.invert([], uniforms.u_view);
   uniforms.u_world = camera.computedMatrix;
