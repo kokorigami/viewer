@@ -13,7 +13,7 @@ prev.addEventListener('click', function () { viewer.prev(); });
 next.addEventListener('click', function () { viewer.next(); });
 reset.addEventListener('click', function () { viewer.frame = 0; });
 
-viewer.emitter.on('update', function (newFrame) {
+viewer.on('update', function (newFrame) {
   frame.value = newFrame;
 });
 

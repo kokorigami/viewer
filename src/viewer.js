@@ -6,11 +6,11 @@ var EventEmitter = require('events');
 var Viewer = function (el) {
   this.el = el || document.createElement('canvas');
   this.renderer = new Renderer(this.el);
+  this._emitter = new EventEmitter();
   this._model = new Model();
   this._frame = 0;
   this.raf = null;
   this.controls = null;
-  this.emitter = new EventEmitter();
 
   this.el.classList.add('kokorigami-viewer');
   return this;
@@ -70,7 +70,20 @@ Viewer.prototype.prev = function () {
 Viewer.prototype.destroy = function () {
   this.stop();
   this.renderer.stop();
+  this._emitter.removeAllListeners();
   controls.remove(this.el, this.controls);
+};
+
+Viewer.prototype.on = function (event, callback) {
+  this._emitter.on(event, callback);
+};
+
+Viewer.prototype.once = function (event, callback) {
+  this._emitter.once(event, callback);
+};
+
+Viewer.prototype.off = function (event, callback) {
+  this._emitter.removeListener(event, callback);
 };
 
 Object.defineProperty(Viewer.prototype, 'model', {
@@ -95,7 +108,7 @@ Object.defineProperty(Viewer.prototype, 'frame', {
     this._frame = frame;
     this.renderer.data(this.model.frameGeometry(frame));
 
-    this.emitter.emit('update', frame);
+    this._emitter.emit('update', frame);
     return frame;
   },
 
