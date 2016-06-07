@@ -15,7 +15,7 @@ describe('viewer', function () {
     var viewer = new Viewer();
     var callback = chai.spy();
 
-    viewer.emitter.on('update', callback);
+    viewer.on('update', callback);
     viewer.frame = 1;
     expect(callback).to.have.been.called();
   });
