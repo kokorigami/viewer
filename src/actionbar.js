@@ -6,7 +6,7 @@ var template = `
   <input class="frame" disabled></input>
 `;
 
-function Actionbar(viewer, el) {
+function ActionBar(viewer, el) {
   var actionbar = el || document.createElement('div');
   actionbar.innerHTML = template;
   actionbar.classList.add('action-bar');
@@ -25,4 +25,4 @@ function Actionbar(viewer, el) {
   return actionbar;
 }
 
-module.exports = Actionbar;
+module.exports = ActionBar;

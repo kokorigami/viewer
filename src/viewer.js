@@ -16,7 +16,7 @@ var Viewer = function (el) {
   return this;
 };
 
-Viewer.Actionbar = require('./actionbar.js');
+Viewer.ActionBar = require('./actionbar.js');
 Viewer.prototype = {};
 
 Viewer.prototype.render = function () {
