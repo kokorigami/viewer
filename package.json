@@ -4,8 +4,7 @@
   "description": "Origami viewer for kokorigami.",
   "main": "src/viewer.js",
   "scripts": {
-    "test": "karma start",
-    "prepublish": "browserify example/example.js > example/main.js"
+    "test": "karma start"
   },
   "author": "",
   "dependencies": {
