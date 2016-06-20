@@ -7,22 +7,41 @@ var template = `
 `;
 
 function ActionBar(viewer, el) {
-  var actionbar = el || document.createElement('div');
-  actionbar.innerHTML = template;
-  actionbar.classList.add('action-bar');
+  this.el = el || document.createElement('div');
+  this.el.innerHTML = template;
+  this.el.classList.add('action-bar');
 
-  var reset = actionbar.querySelector('.reset');
-  var prev = actionbar.querySelector('.prev');
-  var next = actionbar.querySelector('.next');
-  var frame = actionbar.querySelector('.frame');
+  this.viewer = viewer;
 
-  prev.addEventListener('click', function () { viewer.prev(); });
-  next.addEventListener('click', function () { viewer.next(); });
-  reset.addEventListener('click', function () { viewer.frame = 0; });
+  this._onClickPrev = function () { viewer.prev(); };
+  this._onClickNext = function () { viewer.next(); };
+  this._onClickReset = function () { viewer.frame = 0; };
+  this._onUpdate = function (newFrame) { frame.value = newFrame; };
 
-  viewer.on('update', function (newFrame) { frame.value = newFrame; });
+  var reset = this.el.querySelector('.reset');
+  var prev = this.el.querySelector('.prev');
+  var next = this.el.querySelector('.next');
+  var frame = this.el.querySelector('.frame');
 
-  return actionbar;
+  prev.addEventListener('click', this._onClickPrev);
+  next.addEventListener('click', this._onClickNext);
+  reset.addEventListener('click', this._onClickReset);
+  viewer.on('update', this._onUpdate);
+
+  return this;
 }
+
+ActionBar.prototype = {};
+
+ActionBar.prototype.teardown = function () {
+  var reset = this.el.querySelector('.reset');
+  var prev = this.el.querySelector('.prev');
+  var next = this.el.querySelector('.next');
+
+  prev.removeEventListener('click', this._onClickPrev);
+  next.removeEventListener('click', this._onClickNext);
+  reset.removeEventListener('click', this._onClickReset);
+  this.viewer.off('update', this._onUpdate);
+};
 
 module.exports = ActionBar;
