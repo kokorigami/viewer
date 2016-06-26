@@ -1,0 +1,29 @@
+.kokorigami-viewer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.kokorigami-action-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  margin: auto;
+  width: 300px;
+  max-width: 100%;
+  height: 50px;
+  z-index: 1;
+}
+
+.kokorigami-action-bar .progress-bar {
+  background-color: #b3e2cd;
+  width: 100%;
+  height: 10px;
+}
+
+.kokorigami-action-bar .progress {
+  width: 0;
+  height: 100%;
+  background-color: #66c2a5;
+}

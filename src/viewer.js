@@ -16,6 +16,7 @@ var Viewer = function (el) {
   return this;
 };
 
+Viewer.style = require('./style.js');
 Viewer.ActionBar = require('./actionbar.js');
 Viewer.prototype = {};
 
@@ -27,7 +28,7 @@ Viewer.prototype.render = function () {
 Viewer.prototype.play = function (frame) {
   this.stop();
   if (typeof frame === 'undefined') {
-    frame = this.model.lastFrame;
+    frame = this.model.frames.length;
   }
 
   var spf = 1000 / this.model.fps;
@@ -55,17 +56,15 @@ Viewer.prototype.stop = function () {
 };
 
 Viewer.prototype.next = function () {
-  var stepFrames = this.model.stepFrames(this.step);
   var nextFrames = this.model.stepFrames(this.step + 1);
-  nextFrames = this.frame < stepFrames[1] ? stepFrames : nextFrames;
-  this.play(nextFrames[1]);
+  var toFrame = Math.min(nextFrames[0], this.model.frames.length);
+  this.play(toFrame);
 };
 
 Viewer.prototype.prev = function () {
-  var stepFrames = this.model.stepFrames(this.step);
   var prevFrames = this.model.stepFrames(this.step - 1);
-  prevFrames = this.frame > stepFrames[0] ? stepFrames : prevFrames;
-  this.play(prevFrames[0]);
+  var toFrame = Math.max(prevFrames[0], 0);
+  this.play(toFrame);
 };
 
 Viewer.prototype.destroy = function () {
@@ -105,9 +104,12 @@ Object.defineProperty(Viewer.prototype, 'frame', {
   set: function (frame) {
     if (typeof frame !== 'number' || isNaN(frame)) return this.frame;
     frame = Math.max(frame, 0);
-    frame = Math.min(frame, this.model.lastFrame);
+    frame = Math.min(frame, this.model.frames.length);
     this._frame = frame;
-    this.renderer.data(this.model.frameGeometry(frame));
+
+    if (frame <= this.model.final) {
+      this.renderer.data(this.model.frameGeometry(frame));
+    }
 
     this._emitter.emit('update', frame);
     return frame;

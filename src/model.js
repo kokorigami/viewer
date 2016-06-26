@@ -65,8 +65,6 @@ Model.prototype.frameGeometry = function (frameIndex) {
 };
 
 Model.prototype.stepFrames = function (step) {
-  step = Math.max(step, 0);
-  step = Math.min(step, this.steps - 1);
   return [step * this.fps, step * this.fps + this.fps - 1];
 };
 
@@ -81,7 +79,7 @@ Object.defineProperty(Model.prototype, 'steps', {
   }
 });
 
-Object.defineProperty(Model.prototype, 'lastFrame', {
+Object.defineProperty(Model.prototype, 'final', {
   enumerable: true,
   get: function () {
     return this.frames.length - 1;
