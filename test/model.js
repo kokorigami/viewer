@@ -23,8 +23,8 @@ describe('model', function () {
     expect(model.steps).to.equal(2);
   });
 
-  it('provides the index of the last frame', function () {
-    expect(model.lastFrame).to.equal(11);
+  it('provides the index of the final frame', function () {
+    expect(model.final).to.equal(11);
   });
 
   it('interpolates between frames', function () {
