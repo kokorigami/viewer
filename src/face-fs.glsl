@@ -1,14 +1,14 @@
 precision mediump float;
 varying vec4 v_color;
 varying vec3 v_normal;
-// varying vec2 v_texCoord;
+varying vec3 v_texCoord;
 varying vec3 v_surfaceToLight;
 varying vec3 v_surfaceToView;
 
 uniform vec4 u_lightColor;
 uniform vec4 u_ambient;
 uniform float u_shininess;
-//uniform sampler2D u_texture;
+uniform sampler2D u_texture;
 
 vec4 lit(float l ,float h, float m) {
   return vec4(1.0,
@@ -18,8 +18,7 @@ vec4 lit(float l ,float h, float m) {
 }
 
 void main() {
-  // vec4 texColor = texture2D(u_texture, v_texCoord);
-  vec4 texColor = v_color;
+  vec4 texColor = texture2D(u_texture, v_texCoord.xy) * v_color;
   vec3 normal = normalize(v_normal);
   vec3 surfaceToLight = normalize(v_surfaceToLight);
   vec3 surfaceToView = normalize(v_surfaceToView);
