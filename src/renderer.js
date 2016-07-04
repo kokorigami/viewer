@@ -12,6 +12,8 @@ var foldVs = glslify('./fold-vs.glsl');
 var depthnormalFs = glslify('./depthnormal-fs.glsl');
 
 var getImage = require('./get-image.js');
+var white = new Uint8ClampedArray([255, 255, 255, 255]);
+var block = new ImageData(white, 1, 1);
 
 var m4 = require('gl-mat4');
 
@@ -32,7 +34,6 @@ var Renderer = function (canvas) {
   this.uniforms = {};
   this.shaders = {};
   this.buffers = {};
-  this.loading = Promise.reject('Renderer has not been initialized.');
   this.initialize(canvas);
   return this;
 };
@@ -49,7 +50,7 @@ Renderer.prototype.initialize = function (canvas) {
     this.shaders.face = createShader(gl, faceVs, faceFs);
     this.shaders.depth = createShader(gl, faceVs, depthnormalFs);
     this.shaders.fold = createShader(gl, foldVs, foldFs);
-    this.loading = this.texturize(this.texture);
+    this.texturize(this.texture);
   } catch (e) {
     // No WebGL context
     console.log(e.message);
@@ -77,9 +78,7 @@ Renderer.prototype.play = function () {
   this.stop();
 
   if (!this.gl) return;
-  this.loading
-    .then(this.render)
-    .catch(function (err) { console.log(err); });
+  this.render();
   return this;
 };
 
@@ -116,6 +115,12 @@ Renderer.prototype.resize = function (resolution) {
 };
 
 Renderer.prototype.texturize = function (image) {
+  if (!image) {
+    this.texture = null;
+    this.glTexture = createTexture(this.gl, block);
+    return Promise.resolve();
+  }
+
   return getImage(image)
     .then(function (pixels) {
       this.texture = image;
