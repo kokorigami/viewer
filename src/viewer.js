@@ -127,4 +127,14 @@ Object.defineProperty(Viewer.prototype, 'step', {
   }
 });
 
+Object.defineProperty(Viewer.prototype, 'texture', {
+  enumerable: true,
+  set: function (image) {
+    return this.renderer.texturize(image);
+  },
+  get: function () {
+    return this.renderer.texture;
+  }
+});
+
 module.exports = Viewer;
