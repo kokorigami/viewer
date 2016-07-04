@@ -115,6 +115,10 @@ Renderer.prototype.resize = function (resolution) {
 };
 
 Renderer.prototype.texturize = function (image) {
+  if (this.glTexture) {
+    this.glTexture.dispose();
+  }
+
   if (!image) {
     this.texture = null;
     this.glTexture = createTexture(this.gl, block);
@@ -136,6 +140,9 @@ function updateUniforms(gl, camera, texture, uniforms) {
     uniforms.u_lightColor = [1, 0.9, 0.8, 1];
     uniforms.u_ambient = [0, 0, 0, 1];
     uniforms.u_shininess = 70;
+    uniforms.u_near = 0;
+    uniforms.u_far = 10;
+    uniforms.u_view = m4.identity([]);
   }
 
   var t = Date.now();
@@ -148,13 +155,10 @@ function updateUniforms(gl, camera, texture, uniforms) {
       [],
       Math.PI/4.0,
       gl.drawingBufferWidth/gl.drawingBufferHeight,
-      0,
-      10
+      uniforms.u_near,
+      uniforms.u_far
   );
 
-  uniforms.u_near = 0;
-  uniforms.u_far = 10;
-  uniforms.u_view = m4.identity([]);
   uniforms.u_camera = m4.invert([], uniforms.u_view);
   uniforms.u_world = camera.computedMatrix;
   uniforms.u_worldView = m4.multiply([], uniforms.u_view, uniforms.u_world);
