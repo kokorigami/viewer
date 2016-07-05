@@ -3,6 +3,7 @@ var createShader = require('gl-shader');
 var createGeometry = require('gl-geometry');
 var createCamera = require('3d-view');
 var createTexture = require('gl-texture2d');
+var getPixels = require('get-pixels');
 
 var glslify = require('glslify');
 var faceFs = glslify('./face-fs.glsl');
@@ -10,10 +11,6 @@ var faceVs = glslify('./face-vs.glsl');
 var foldFs = glslify('./fold-fs.glsl');
 var foldVs = glslify('./fold-vs.glsl');
 var depthnormalFs = glslify('./depthnormal-fs.glsl');
-
-var getImage = require('./get-image.js');
-var white = new Uint8ClampedArray([255, 255, 255, 255]);
-var block = new ImageData(white, 1, 1);
 
 var m4 = require('gl-mat4');
 
@@ -24,6 +21,7 @@ var Renderer = function (canvas) {
   this.texture = null;
   this.glTexture = null;
   this.render = this.render.bind(this);
+
   this.camera = createCamera({
     center: [0.5, 0.5, 0],
     eye: [0, 1, -3],
@@ -31,6 +29,7 @@ var Renderer = function (canvas) {
     up: [0, 0, 1],
     mode: 'orbit'
   });
+
   this.uniforms = {
     u_lightWorldPos: [0, 0, 6],
     u_lightColor: [1, 0.9, 0.8, 1],
@@ -38,8 +37,14 @@ var Renderer = function (canvas) {
     u_shininess: 70,
     u_near: 0,
     u_far: 10,
-    u_view: m4.identity([])
+    u_view: m4.create(),
+    u_camera: m4.create(),
+    u_world: m4.create(),
+    u_worldView: m4.create(),
+    u_worldViewProjection: m4.create(),
+    u_texture: 0
   };
+
   this.shaders = {};
   this.buffers = {};
   this.initialize(canvas);
@@ -79,7 +84,7 @@ Renderer.prototype.data = function (data) {
       lengthSoFar (1 float per vertex)
       position
   */
-  this.updated = true;
+  this.update(true);
   return this;
 };
 
@@ -98,57 +103,52 @@ Renderer.prototype.stop = function () {
 
 Renderer.prototype.render = function () {
   var gl = this.gl;
-  this.update();
 
-  if (this.updated) {
+  if (this.update() || this.resize() || this.snap()) {
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
+    var projection = m4.create();
+    m4.perspective(
+      projection,
+      Math.PI/4.0,
+      gl.drawingBufferWidth/gl.drawingBufferHeight,
+      this.uniforms.u_near,
+      this.uniforms.u_far
+    );
+
+    m4.invert(this.uniforms.u_camera, this.uniforms.u_view);
+    m4.copy(this.uniforms.u_world, this.camera.computedMatrix);
+    m4.multiply(this.uniforms.u_worldView, this.uniforms.u_view, this.uniforms.u_world);
+    m4.multiply(this.uniforms.u_worldViewProjection, projection, this.uniforms.u_worldView);
+
     renderPass(gl, this.shaders.face, this.buffers.face, this.uniforms, 'TRIANGLES');
-    this.updated = false;
+    this.update(false);
   }
 
   this.raf = requestAnimationFrame(this.render);
 };
 
-Renderer.prototype.update = function (t) {
-  t = t || Date.now();
-
-  var gl = this.gl;
-  var uniforms = this.uniforms;
-  var camera = this.camera;
-
-  camera.idle(t - 20);
-  camera.flush(t - 100);
-  camera.recalcMatrix(t - 25);
-
-  var updated = this.resize() || !equivalent(camera.computedMatrix, uniforms.u_world);
-
-  if (updated) {
-    var projection = m4.perspective(
-        [],
-        Math.PI/4.0,
-        gl.drawingBufferWidth/gl.drawingBufferHeight,
-        uniforms.u_near,
-        uniforms.u_far
-    );
-
-    uniforms.u_camera = m4.invert([], uniforms.u_view);
-    uniforms.u_world = m4.copy([], camera.computedMatrix);
-    uniforms.u_worldView = m4.multiply([], uniforms.u_view, uniforms.u_world);
-    uniforms.u_worldViewProjection = m4.multiply([], projection, uniforms.u_worldView);
-
-    this.updated = true;
-  }
-  return this;
+Renderer.prototype.update = function (force) {
+  if (force !== undefined) this._update = force;
+  return this._update;
 };
 
-Renderer.prototype.resize = function (resolution) {
-  resolution = resolution || 1;
+Renderer.prototype.snap = function () {
+  var t = Date.now();
+  this.camera.idle(t - 20);
+  this.camera.flush(t - 100);
+  this.camera.recalcMatrix(t - 25);
+
+  return !equivalent(this.camera.computedMatrix, this.uniforms.u_world);
+};
+
+Renderer.prototype.resize = function () {
+  var resolution = window.devicePixelRatio || 1;
   resolution = Math.max(1, resolution);
   var canvas = this.canvas;
-  var width  = canvas.clientWidth  * resolution | 0;
-  var height = canvas.clientHeight * resolution | 0;
+  var width  = canvas.offsetWidth  * resolution || 0;
+  var height = canvas.offsetHeight * resolution || 0;
   if (canvas.width !== width || canvas.height !== height) {
     canvas.width = width;
     canvas.height = height;
@@ -157,25 +157,39 @@ Renderer.prototype.resize = function (resolution) {
   return false;
 };
 
-Renderer.prototype.texturize = function (image) {
+Renderer.prototype.texturize = function (source) {
   var updateTexture = function (name, resource) {
     if (this.glTexture) this.glTexture.dispose();
     this.texture = name;
     this.glTexture = createTexture(this.gl, resource);
-    this.uniforms.u_texture = this.glTexture.bind();
-    this.updated = true;
+    this.glTexture.bind(0);
+    this.update(true);
   }.bind(this);
 
-  // TODO: extend this block to handle resources covered by gl-texture2d without get-pixels
-  if (!image) {
-    updateTexture(null, block);
+  if (!source) {
+    updateTexture(null, createPixel([255, 255, 255, 255]));
     return Promise.resolve();
   }
 
-  return getImage(image)
-    .then(function (pixels) { updateTexture(image, pixels); })
+  return getImage(source)
+    .then(function (pixels) { updateTexture(source, pixels); })
     .catch(function (err) { console.log(err); });
 };
+
+function createPixel(rgba) {
+  var color = new Uint8ClampedArray(rgba);
+  var pixel = new ImageData(color, 1, 1);
+  return pixel;
+}
+
+function getImage(source) {
+  return new Promise(function (res, rej) {
+    getPixels(source, function (err, pixels) {
+      if (err) rej(err);
+      else res(pixels);
+    });
+  });
+}
 
 function renderPass(gl, shader, geom, uniforms, drawType) {
   shader.bind();
