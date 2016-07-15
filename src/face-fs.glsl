@@ -22,14 +22,19 @@ void main() {
   vec3 normal = normalize(v_normal);
   vec3 surfaceToLight = normalize(v_surfaceToLight);
   vec3 surfaceToView = normalize(v_surfaceToView);
-  vec3 halfVector = normalize(surfaceToLight + surfaceToView);
 
-  vec4 litR = lit(dot(normal, surfaceToLight),
-                dot(normal, halfVector), u_shininess);
+  float faceCheck = dot(normal, surfaceToView);
+  vec3 reflect = vec3(faceCheck, faceCheck, faceCheck);
+
+  vec3 halfVector = normalize((surfaceToLight) + (surfaceToView * reflect));
+
+  vec4 litR = lit(dot(normal, surfaceToLight * reflect), dot(normal, halfVector), u_shininess);
 
   vec4 outColor = vec4(
       (u_lightColor * (texColor * litR.y + texColor * u_ambient)).rgb,
       texColor.a);
 
   gl_FragColor = outColor;
+
+  //gl_FragColor = vec4(0.5 + isBack * 0.5, 0.5, 0.5, 1.0);
 }
