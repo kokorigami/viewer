@@ -18,8 +18,8 @@ var Renderer = function (canvas) {
   this.gl = null;
   this.canvas = null;
   this.raf = null;
-  this.texture = null;
-  this.glTexture = null;
+  this.textures = [null, null];
+  this.glTextures = [];
   this.render = this.render.bind(this);
 
   this.camera = createCamera({
@@ -31,10 +31,11 @@ var Renderer = function (canvas) {
   });
 
   this.uniforms = {
+    u_color: [1, 1, 1, 1],
     u_lightWorldPos: [0, 0, 6],
     u_lightColor: [1, 0.9, 0.8, 1],
-    u_ambient: [0, 0, 0, 1],
-    u_shininess: 70,
+    u_ambient: [0.2, 0.2, 0.3, 1],
+    u_shininess: 10,
     u_near: 0,
     u_far: 10,
     u_view: m4.create(),
@@ -42,7 +43,8 @@ var Renderer = function (canvas) {
     u_world: m4.create(),
     u_worldView: m4.create(),
     u_worldViewProjection: m4.create(),
-    u_texture: 0
+    u_texture: 0,
+    u_textureBack: 1
   };
 
   this.shaders = {};
@@ -63,7 +65,7 @@ Renderer.prototype.initialize = function (canvas) {
     this.shaders.face = createShader(gl, faceVs, faceFs);
     this.shaders.depth = createShader(gl, faceVs, depthnormalFs);
     this.shaders.fold = createShader(gl, foldVs, foldFs);
-    this.texturize(this.texture);
+    this.texturize(this.textures);
   } catch (e) {
     // No WebGL context
     console.log(e.message);
@@ -122,6 +124,9 @@ Renderer.prototype.render = function () {
     m4.multiply(this.uniforms.u_worldView, this.uniforms.u_view, this.uniforms.u_world);
     m4.multiply(this.uniforms.u_worldViewProjection, projection, this.uniforms.u_worldView);
 
+    this.uniforms.u_texture = this.glTextures[0].bind(0);
+    this.uniforms.u_textureBack = this.glTextures[1].bind(1);
+
     renderPass(gl, this.shaders.face, this.buffers.face, this.uniforms, 'TRIANGLES');
     this.update(false);
   }
@@ -157,23 +162,27 @@ Renderer.prototype.resize = function () {
   return false;
 };
 
-Renderer.prototype.texturize = function (source) {
-  var updateTexture = function (name, resource) {
-    if (this.glTexture) this.glTexture.dispose();
-    this.texture = name;
-    this.glTexture = createTexture(this.gl, resource);
-    this.glTexture.bind(0);
+Renderer.prototype.texturize = function (sources) {
+  var updateTexture = function (name, resource, i) {
+    if (this.glTextures[i]) {
+      this.glTextures[i].dispose();
+    }
+    this.textures[i] = name;
+    this.glTextures[i] = createTexture(this.gl, resource);
     this.update(true);
   }.bind(this);
 
-  if (!source) {
-    updateTexture(null, createPixel([255, 255, 255, 255]));
-    return Promise.resolve();
-  }
+  var promises = sources.map(function (source, i) {
+    if (!source) {
+      updateTexture(null, createPixel([255, 255, 255, 255]), i);
+      return Promise.resolve();
+    }
+    return getImage(source)
+      .then(function (pixels) { updateTexture(source, pixels, i); })
+      .catch(function (err) { console.log(err); });
+  });
 
-  return getImage(source)
-    .then(function (pixels) { updateTexture(source, pixels); })
-    .catch(function (err) { console.log(err); });
+  return Promise.all(promises);
 };
 
 function createPixel(rgba) {

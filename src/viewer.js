@@ -127,13 +127,14 @@ Object.defineProperty(Viewer.prototype, 'step', {
   }
 });
 
-Object.defineProperty(Viewer.prototype, 'texture', {
+Object.defineProperty(Viewer.prototype, 'textures', {
   enumerable: true,
-  set: function (image) {
-    return this.renderer.texturize(image);
+  set: function (images) {
+    if (!images instanceof Array) images = [images, images];
+    return this.renderer.texturize(images);
   },
   get: function () {
-    return this.renderer.texture;
+    return this.renderer.textures;
   }
 });
 

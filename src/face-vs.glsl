@@ -6,7 +6,6 @@ attribute vec3 texCoord;
 // attribute vec3 color;
 
 varying vec4 v_position;
-varying vec4 v_color;
 varying vec3 v_normal;
 varying vec3 v_texCoord;
 varying vec3 v_surfaceToLight;
@@ -19,7 +18,6 @@ uniform mat4 u_worldViewProjection;
 uniform sampler2D u_texture;
 
 void main() {
-  v_color = vec4(0.9, 0.5, 0.8, 1);
   v_normal = (u_world * vec4(normal, 0)).xyz;
   v_texCoord = texCoord;
   v_position = vec4(position, 1.0);
