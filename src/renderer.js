@@ -19,6 +19,7 @@ var Renderer = function (canvas) {
   this.canvas = null;
   this.raf = null;
   this.textures = [null, null];
+
   this.glTextures = [];
   this.render = this.render.bind(this);
 
@@ -31,7 +32,6 @@ var Renderer = function (canvas) {
   });
 
   this.uniforms = {
-    u_color: [1, 1, 1, 1],
     u_lightWorldPos: [0, 0, 6],
     u_lightColor: [1, 0.9, 0.8, 1],
     u_ambient: [0.2, 0.2, 0.3, 1],
@@ -173,8 +173,9 @@ Renderer.prototype.texturize = function (sources) {
   }.bind(this);
 
   var promises = sources.map(function (source, i) {
-    if (!source) {
-      updateTexture(null, createPixel([255, 255, 255, 255]), i);
+    if (!source || source instanceof Array) {
+      source = source || [255, 255, 255, 255];
+      updateTexture(source, createPixel(source), i);
       return Promise.resolve();
     }
     return getImage(source)

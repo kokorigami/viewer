@@ -1,11 +1,9 @@
 precision mediump float;
-varying vec4 v_color;
 varying vec3 v_normal;
 varying vec3 v_texCoord;
 varying vec3 v_surfaceToLight;
 varying vec3 v_surfaceToView;
 
-uniform vec4 u_color;
 uniform vec4 u_lightColor;
 uniform vec4 u_ambient;
 uniform float u_shininess;
@@ -31,7 +29,7 @@ void main() {
 
   vec4 frontTexture = texture2D(u_texture, v_texCoord.xy) * vec4(isFront, isFront, isFront, 1.0);
   vec4 backTexture = texture2D(u_textureBack, v_texCoord.xy) * vec4(isBack, isBack, isBack, 1.0);
-  vec4 texColor = (frontTexture + backTexture) * u_color;
+  vec4 texColor = frontTexture + backTexture;
 
   vec3 halfVector = normalize((surfaceToLight) + (surfaceToView * reflection));
   vec4 litR = lit(dot(normal, surfaceToLight * reflection), dot(normal, halfVector), u_shininess);
