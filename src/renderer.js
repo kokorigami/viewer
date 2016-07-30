@@ -186,6 +186,11 @@ Renderer.prototype.texturize = function (sources) {
   return Promise.all(promises);
 };
 
+Renderer.prototype.background = function (rgba) {
+  this.uniforms.u_ambient = rgba || this.uniforms.u_ambient;
+  return this.uniforms.u_ambient;
+};
+
 function createPixel(rgba) {
   var color = new Uint8ClampedArray(rgba);
   var pixel = new ImageData(color, 1, 1);

@@ -138,4 +138,17 @@ Object.defineProperty(Viewer.prototype, 'textures', {
   }
 });
 
+Object.defineProperty(Viewer.prototype, 'background', {
+  enumerable: true,
+  set: function (rgba) {
+    var css = rgba.map(function (c, i) { return i < 3 ? Math.floor(c * 255) : c; });
+    this.el.style.backgroundColor = 'rgba(' + css.join(',') + ')';
+    this.renderer.background(rgba);
+    return rgba;
+  },
+  get: function () {
+    return this.renderer.background();
+  }
+});
+
 module.exports = Viewer;
