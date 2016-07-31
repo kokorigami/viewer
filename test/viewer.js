@@ -19,4 +19,10 @@ describe('viewer', function () {
     viewer.frame = 1;
     expect(callback).to.have.been.called();
   });
+
+  it('can set the background color', function () {
+    var viewer = new Viewer();
+    viewer.background = [0, 255, 255, 102];
+    expect(viewer.el.style.backgroundColor).to.equal('rgba(0, 255, 255, 0.4)');
+  });
 });
