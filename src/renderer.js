@@ -186,6 +186,18 @@ Renderer.prototype.texturize = function (sources) {
   return Promise.all(promises);
 };
 
+Renderer.prototype.ambient = function (rgba) {
+  if (rgba !== undefined) {
+    var normalized = rgba.map(function (c) { return c / 255; });
+    this.uniforms.u_ambient = normalized;
+    return rgba;
+  }
+
+  var ambient = this.uniforms.u_ambient;
+  var unnormalized = ambient.map(function (c) { return Math.round(c * 255); });
+  return unnormalized;
+};
+
 function createPixel(rgba) {
   var color = new Uint8ClampedArray(rgba);
   var pixel = new ImageData(color, 1, 1);

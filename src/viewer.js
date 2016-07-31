@@ -130,11 +130,26 @@ Object.defineProperty(Viewer.prototype, 'step', {
 Object.defineProperty(Viewer.prototype, 'textures', {
   enumerable: true,
   set: function (images) {
-    if (!images instanceof Array) images = [images, images];
+    if (!images instanceof Array || images.length !== 2) {
+      images = [images, images];
+    }
     return this.renderer.texturize(images);
   },
   get: function () {
     return this.renderer.textures;
+  }
+});
+
+Object.defineProperty(Viewer.prototype, 'background', {
+  enumerable: true,
+  set: function (rgba) {
+    var css = [rgba[0], rgba[1], rgba[2], rgba[3] / 255];
+    this.el.style.backgroundColor = 'rgba(' + css.join(',') + ')';
+    this.renderer.ambient(rgba);
+    return rgba;
+  },
+  get: function () {
+    return this.renderer.ambient();
   }
 });
 
