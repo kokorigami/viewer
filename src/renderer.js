@@ -26,7 +26,7 @@ var Renderer = function (canvas) {
   this.camera = createCamera({
     center: [0.5, 0.5, 0],
     eye: [0, 1, -3],
-    distanceLimits: [1, 6],
+    distanceLimits: [2, 6],
     up: [0, 0, 1],
     mode: 'orbit'
   });
@@ -36,7 +36,7 @@ var Renderer = function (canvas) {
     u_lightColor: [1, 0.9, 0.8, 1],
     u_ambient: [0.2, 0.2, 0.3, 1],
     u_shininess: 10,
-    u_near: 0,
+    u_near: 1,
     u_far: 10,
     u_view: m4.create(),
     u_camera: m4.create(),
@@ -59,9 +59,9 @@ Renderer.prototype.initialize = function (canvas) {
   var gl;
   try {
     gl = createContext(canvas);
+    gl.enable(gl.DEPTH_TEST);
     this.gl = gl;
     this.canvas = canvas;
-    // gl.enable(gl.DEPTH_TEST);
     this.shaders.face = createShader(gl, faceVs, faceFs);
     this.shaders.depth = createShader(gl, faceVs, depthnormalFs);
     this.shaders.fold = createShader(gl, foldVs, foldFs);
