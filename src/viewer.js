@@ -25,19 +25,21 @@ Viewer.prototype.render = function () {
   this.renderer.play();
 };
 
-Viewer.prototype.play = function (frame) {
+Viewer.prototype.play = function (frame, fps) {
+  fps = fps || this.model.fps;
+
   this.stop();
   if (typeof frame === 'undefined') {
     frame = this.model.frames.length;
   }
 
-  var spf = 1000 / this.model.fps;
+  var spf = 1000 / fps;
   var startFrame = this.frame;
   var animationTime = Math.abs(frame - startFrame) * spf;
   var start;
 
   var render = function (timestamp) {
-    if (!start) start = timestamp;
+    start = start || timestamp;
 
     var delta = (timestamp - start) / animationTime;
     delta = Math.min(delta, 1);
@@ -46,25 +48,29 @@ Viewer.prototype.play = function (frame) {
 
     if (this.frame !== frame) {
       this.raf = requestAnimationFrame(render);
+    } else {
+      this._emitter.emit('stop');
     }
   }.bind(this);
   this.raf = requestAnimationFrame(render);
+  this._emitter.emit('play');
+};
+
+Viewer.prototype.playStep = function (step, fps) {
+  var frames = this.model.stepFrames(step);
+  frames[0] = Math.max(frames[0], 0);
+  frames[1] = Math.min(frames[1], this.model.frames.length);
+  if (this.frame < frames[0] || this.frame > frames[0]) {
+    this.frame = frames[0];
+  }
+  this.play(frames[1] + 1, fps);
 };
 
 Viewer.prototype.stop = function () {
+  if (!this.raf) return;
   cancelAnimationFrame(this.raf);
-};
-
-Viewer.prototype.next = function () {
-  var nextFrames = this.model.stepFrames(this.step + 1);
-  var toFrame = Math.min(nextFrames[0], this.model.frames.length);
-  this.play(toFrame);
-};
-
-Viewer.prototype.prev = function () {
-  var prevFrames = this.model.stepFrames(this.step - 1);
-  var toFrame = Math.max(prevFrames[0], 0);
-  this.play(toFrame);
+  this.raf = null;
+  this._emitter.emit('stop');
 };
 
 Viewer.prototype.destroy = function () {
@@ -105,12 +111,9 @@ Object.defineProperty(Viewer.prototype, 'frame', {
     if (typeof frame !== 'number' || isNaN(frame)) return this.frame;
     frame = Math.max(frame, 0);
     frame = Math.min(frame, this.model.frames.length);
+    var renderFrame = Math.min(frame, this.model.final);
+    this.renderer.data(this.model.frameGeometry(renderFrame));
     this._frame = frame;
-
-    if (frame <= this.model.final) {
-      this.renderer.data(this.model.frameGeometry(frame));
-    }
-
     this._emitter.emit('update', frame);
     return frame;
   },
