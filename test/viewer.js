@@ -46,13 +46,16 @@ describe('viewer', function () {
 
   it('can play to a specific frame', function (done) {
     var viewer = new Viewer();
-    viewer.model = model;
-    viewer.play(2, 100);
-    expect(viewer.frame).to.equal(0);
-    setTimeout(function () {
+    var check = function () {
       expect(viewer.frame).to.equal(2);
       done();
-    }, 40);
+    };
+    viewer.model = model;
+    viewer.play(2, 1000);
+    expect(viewer.frame).to.equal(0);
+    setTimeout(function () {
+      requestAnimationFrame(check);
+    }, 10);
   });
 
   it('can play a specific step', function () {
