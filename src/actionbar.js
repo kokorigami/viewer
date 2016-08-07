@@ -22,8 +22,8 @@ function ActionBar(viewer, el) {
   this.frame = this.el.querySelector('.frame');
   this.bar = this.el.querySelector('.progress');
 
-  this._onClickPrev = function () { viewer.prev(); };
-  this._onClickNext = function () { viewer.next(); };
+  this._onClickPrev = function () { viewer.playStep(viewer.step - 1); };
+  this._onClickNext = function () { viewer.playStep(viewer.step); };
   this._onClickReset = function () { viewer.frame = 0; };
   this.update = this.update.bind(this);
 
