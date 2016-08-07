@@ -51,11 +51,9 @@ describe('viewer', function () {
       done();
     };
     viewer.model = model;
+    viewer.on('stop', check);
     viewer.play(2, 1000);
     expect(viewer.frame).to.equal(0);
-    setTimeout(function () {
-      requestAnimationFrame(check);
-    }, 10);
   });
 
   it('can play a specific step', function () {

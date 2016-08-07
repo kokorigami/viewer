@@ -39,7 +39,7 @@ Viewer.prototype.play = function (frame, fps) {
   var start;
 
   var render = function (timestamp) {
-    if (!start) start = timestamp;
+    start = start || timestamp;
 
     var delta = (timestamp - start) / animationTime;
     delta = Math.min(delta, 1);
@@ -48,9 +48,12 @@ Viewer.prototype.play = function (frame, fps) {
 
     if (this.frame !== frame) {
       this.raf = requestAnimationFrame(render);
+    } else {
+      this._emitter.emit('stop');
     }
   }.bind(this);
   this.raf = requestAnimationFrame(render);
+  this._emitter.emit('play');
 };
 
 Viewer.prototype.playStep = function (step, fps) {
@@ -64,7 +67,10 @@ Viewer.prototype.playStep = function (step, fps) {
 };
 
 Viewer.prototype.stop = function () {
+  if (!this.raf) return;
   cancelAnimationFrame(this.raf);
+  this.raf = null;
+  this._emitter.emit('stop');
 };
 
 Viewer.prototype.destroy = function () {
