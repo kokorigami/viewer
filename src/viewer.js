@@ -97,6 +97,7 @@ Object.defineProperty(Viewer.prototype, 'model', {
   set: function (data) {
     this._model.set(data);
     this.frame = 0; // reset frame
+    this._emitter.emit('swap', data);
     return this.model;
   },
 

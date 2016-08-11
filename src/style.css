@@ -17,13 +17,37 @@
 }
 
 .kokorigami-action-bar .progress-bar {
+  position: relative;
   background-color: #b3e2cd;
   width: 100%;
   height: 10px;
 }
 
 .kokorigami-action-bar .progress {
+  position: absolute;
+  top: 0; left: 0;
   width: 0;
   height: 100%;
   background-color: #66c2a5;
+  pointer-events: none;
+}
+
+.kokorigami-action-bar .steps {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+
+.kokorigami-action-bar .steps div {
+  position: absolute;
+  border-left: 1px solid grey;
+  height: 100%;
+}
+
+.kokorigami-action-bar .steps div:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.kokorigami-action-bar .steps div:first-of-type {
+  border-left: none;
 }
