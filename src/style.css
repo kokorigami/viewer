@@ -23,7 +23,7 @@
   height: 10px;
 }
 
-.kokorigami-action-bar .progress {
+.kokorigami-action-bar .bar {
   position: absolute;
   top: 0; left: 0;
   width: 0;

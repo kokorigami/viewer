@@ -1,11 +1,10 @@
 
 var template = `
   <button class="reset" type="button">reset</button>
-  <button class="prev" type="button">&lt;</button>
-  <button class="next" type="button">&gt;</button>
+  <button class="play" type="button">&gt;</button>
   <input class="frame" disabled></input>
   <div class="progress-bar">
-    <div class="progress"></div>
+    <div class="bar"></div>
     <div class="steps"></div>
   </div>
 `;
@@ -18,21 +17,25 @@ function ActionBar(viewer, el) {
   this.viewer = viewer;
 
   this.reset = this.el.querySelector('.reset');
-  this.prev = this.el.querySelector('.prev');
-  this.next = this.el.querySelector('.next');
+  this.play = this.el.querySelector('.play');
   this.frame = this.el.querySelector('.frame');
-  this.bar = this.el.querySelector('.progress');
+  this.bar = this.el.querySelector('.bar');
   this.steps = this.el.querySelector('.steps');
 
-  this._onClickPrev = function () { viewer.playStep(viewer.step - 1); };
-  this._onClickNext = function () { viewer.playStep(viewer.step); };
+  this._onClickPlay = function () { viewer.playStep(viewer.step); };
   this._onClickReset = function () { viewer.frame = 0; };
+  this._onClickSteps = function (e) {
+    var stepEl = e.target;
+    var step = stepEl.dataset.index;
+    var startFrame = viewer.model.stepFrames(step)[0];
+    viewer.frame = startFrame;
+  };
   this.swap = this.swap.bind(this);
   this.update = this.update.bind(this);
 
-  this.prev.addEventListener('click', this._onClickPrev);
-  this.next.addEventListener('click', this._onClickNext);
+  this.play.addEventListener('click', this._onClickPlay);
   this.reset.addEventListener('click', this._onClickReset);
+  this.steps.addEventListener('click', this._onClickSteps);
   viewer.on('swap', this.swap);
   viewer.on('update', this.update);
 
@@ -67,18 +70,15 @@ ActionBar.prototype.swap = function () {
     stepLength = 100 * (stepFrames[1] - stepFrames[0] + 1) / total;
     stepEl.style.left = stepStart + '%';
     stepEl.style.width = stepLength + '%';
+    stepEl.dataset.index = i;
     this.steps.appendChild(stepEl);
   }
 };
 
 ActionBar.prototype.teardown = function () {
-  var reset = this.el.querySelector('.reset');
-  var prev = this.el.querySelector('.prev');
-  var next = this.el.querySelector('.next');
-
-  prev.removeEventListener('click', this._onClickPrev);
-  next.removeEventListener('click', this._onClickNext);
-  reset.removeEventListener('click', this._onClickReset);
+  this.play.removeEventListener('click', this._onClickNext);
+  this.reset.removeEventListener('click', this._onClickReset);
+  this.steps.removeEventListener('click', this._onClickSteps);
   this.viewer.off('update', this.update);
   this.viewer.off('swap', this.swap);
 };
