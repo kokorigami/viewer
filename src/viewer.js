@@ -32,6 +32,7 @@ Viewer.prototype.play = function (frame, fps) {
   if (typeof frame === 'undefined') {
     frame = this.model.frames.length;
   }
+  frame = Math.min(frame, this.model.frames.length);
 
   var spf = 1000 / fps;
   var startFrame = this.frame;
@@ -59,11 +60,11 @@ Viewer.prototype.play = function (frame, fps) {
 Viewer.prototype.playStep = function (step, fps) {
   var frames = this.model.stepFrames(step);
   frames[0] = Math.max(frames[0], 0);
-  frames[1] = Math.min(frames[1], this.model.frames.length);
-  if (this.frame < frames[0] || this.frame > frames[0]) {
+  frames[1] = Math.min(frames[1], this.model.frames.length) + 1;
+  if (this.frame < frames[0] || this.frame > frames[1]) {
     this.frame = frames[0];
   }
-  this.play(frames[1] + 1, fps);
+  this.play(frames[1], fps);
 };
 
 Viewer.prototype.stop = function () {

@@ -16,6 +16,20 @@
   z-index: 1;
 }
 
+.kokorigami-action-bar button {
+  height: 20px;
+  width: 20px;
+  background-color: transparent;
+  padding: 0;
+  border: none;
+}
+
+.kokorigami-action-bar svg {
+  height: 100%;
+  width: 100%;
+  fill: black;
+}
+
 .kokorigami-action-bar .progress-bar {
   position: relative;
   background-color: #b3e2cd;
