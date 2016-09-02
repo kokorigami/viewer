@@ -3,6 +3,7 @@ var createShader = require('gl-shader');
 var createGeometry = require('gl-geometry');
 var createCamera = require('3d-view');
 var createTexture = require('gl-texture2d');
+var createFBO = require('gl-fbo');
 var getPixels = require('get-pixels');
 
 var glslify = require('glslify');
@@ -44,11 +45,13 @@ var Renderer = function (canvas) {
     u_worldView: m4.create(),
     u_worldViewProjection: m4.create(),
     u_texture: 0,
-    u_textureBack: 1
+    u_textureBack: 1,
+    u_framebuffer: 2
   };
 
   this.shaders = {};
   this.buffers = {};
+  this.framebuffer = null;
   this.initialize(canvas);
   return this;
 };
@@ -65,7 +68,9 @@ Renderer.prototype.initialize = function (canvas) {
     this.shaders.face = createShader(gl, faceVs, faceFs);
     this.shaders.depth = createShader(gl, faceVs, depthnormalFs);
     this.shaders.fold = createShader(gl, foldVs, foldFs);
+    this.framebuffer = createFBO(gl, [canvas.width, canvas.height]);
     this.texturize(this.textures);
+    this.resize();
   } catch (e) {
     // No WebGL context
     console.log(e.message);
@@ -124,10 +129,20 @@ Renderer.prototype.render = function () {
     m4.multiply(this.uniforms.u_worldView, this.uniforms.u_view, this.uniforms.u_world);
     m4.multiply(this.uniforms.u_worldViewProjection, projection, this.uniforms.u_worldView);
 
+    // Swap to fbo
+    this.framebuffer.bind();
+    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    renderPass(gl, this.shaders.depth, this.buffers.face, this.uniforms, 'TRIANGLES');
+
+    // Swap to display
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
     this.uniforms.u_texture = this.glTextures[0].bind(0);
     this.uniforms.u_textureBack = this.glTextures[1].bind(1);
-
+    this.uniforms.u_framebuffer = this.framebuffer.color[0].bind(2);
     renderPass(gl, this.shaders.face, this.buffers.face, this.uniforms, 'TRIANGLES');
+
     this.update(false);
   }
 
@@ -154,9 +169,10 @@ Renderer.prototype.resize = function () {
   var canvas = this.canvas;
   var width  = canvas.offsetWidth  * resolution || 0;
   var height = canvas.offsetHeight * resolution || 0;
-  if (canvas.width !== width || canvas.height !== height) {
+  if (width && height && (canvas.width !== width || canvas.height !== height)) {
     canvas.width = width;
     canvas.height = height;
+    this.framebuffer.shape = [width, height];
     return true;
   }
   return false;
