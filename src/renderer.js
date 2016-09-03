@@ -5,12 +5,15 @@ var createCamera = require('3d-view');
 var createTexture = require('gl-texture2d');
 var createFBO = require('gl-fbo');
 var getPixels = require('get-pixels');
+var getQuad = require('gl-big-quad');
 
 var glslify = require('glslify');
 var faceFs = glslify('./face-fs.glsl');
 var faceVs = glslify('./face-vs.glsl');
 var foldFs = glslify('./fold-fs.glsl');
 var foldVs = glslify('./fold-vs.glsl');
+var drawFs = glslify('./draw-fs.glsl');
+var drawVs = glslify('./draw-vs.glsl');
 var depthnormalFs = glslify('./depthnormal-fs.glsl');
 
 var m4 = require('gl-mat4');
@@ -46,12 +49,13 @@ var Renderer = function (canvas) {
     u_worldViewProjection: m4.create(),
     u_texture: 0,
     u_textureBack: 1,
-    u_framebuffer: 2
+    u_depthBuffer: 2,
+    u_origamiBuffer: 3
   };
 
   this.shaders = {};
   this.buffers = {};
-  this.framebuffer = null;
+  this.framebuffers = [null, null];
   this.initialize(canvas);
   return this;
 };
@@ -68,7 +72,10 @@ Renderer.prototype.initialize = function (canvas) {
     this.shaders.face = createShader(gl, faceVs, faceFs);
     this.shaders.depth = createShader(gl, faceVs, depthnormalFs);
     this.shaders.fold = createShader(gl, foldVs, foldFs);
-    this.framebuffer = createFBO(gl, [canvas.width, canvas.height]);
+    this.shaders.draw = createShader(gl, drawVs, drawFs);
+    this.buffers.quad = getQuad(gl);
+    this.framebuffers[0] = createFBO(gl, [canvas.width, canvas.height]);
+    this.framebuffers[1] = createFBO(gl, [canvas.width, canvas.height]);
     this.texturize(this.textures);
     this.resize();
   } catch (e) {
@@ -129,19 +136,25 @@ Renderer.prototype.render = function () {
     m4.multiply(this.uniforms.u_worldView, this.uniforms.u_view, this.uniforms.u_world);
     m4.multiply(this.uniforms.u_worldViewProjection, projection, this.uniforms.u_worldView);
 
-    // Swap to fbo
-    this.framebuffer.bind();
+    this.framebuffers[0].bind();
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     renderPass(gl, this.shaders.depth, this.buffers.face, this.uniforms, 'TRIANGLES');
 
-    // Swap to display
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-
+    this.framebuffers[1].bind();
+    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     this.uniforms.u_texture = this.glTextures[0].bind(0);
     this.uniforms.u_textureBack = this.glTextures[1].bind(1);
-    this.uniforms.u_framebuffer = this.framebuffer.color[0].bind(2);
     renderPass(gl, this.shaders.face, this.buffers.face, this.uniforms, 'TRIANGLES');
+
+    // Swap to display
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    this.uniforms.u_depthBuffer = this.framebuffers[0].color[0].bind(2);
+    this.uniforms.u_origamiBuffer = this.framebuffers[1].color[0].bind(3);
+    renderPass(gl, this.shaders.draw, this.buffers.quad, this.uniforms, 'TRIANGLES');
 
     this.update(false);
   }
@@ -167,12 +180,13 @@ Renderer.prototype.resize = function () {
   var resolution = window.devicePixelRatio || 1;
   resolution = Math.max(1, resolution);
   var canvas = this.canvas;
-  var width  = canvas.offsetWidth  * resolution || 0;
-  var height = canvas.offsetHeight * resolution || 0;
-  if (width && height && (canvas.width !== width || canvas.height !== height)) {
+  var width  = canvas.offsetWidth  * resolution || 1;
+  var height = canvas.offsetHeight * resolution || 1;
+  if (canvas.width !== width || canvas.height !== height) {
     canvas.width = width;
     canvas.height = height;
-    this.framebuffer.shape = [width, height];
+    this.framebuffers[0].shape = [width, height];
+    this.framebuffers[1].shape = [width, height];
     return true;
   }
   return false;

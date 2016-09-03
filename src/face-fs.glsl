@@ -9,7 +9,6 @@ uniform vec4 u_ambient;
 uniform float u_shininess;
 uniform sampler2D u_texture;
 uniform sampler2D u_textureBack;
-uniform sampler2D u_framebuffer;
 
 vec4 lit(float l ,float h, float m) {
   return vec4(1.0,
