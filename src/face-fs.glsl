@@ -7,8 +7,8 @@ varying vec3 v_surfaceToView;
 uniform vec4 u_lightColor;
 uniform vec4 u_ambient;
 uniform float u_shininess;
-uniform sampler2D u_texture;
-uniform sampler2D u_textureBack;
+uniform sampler2D u_texture0;
+uniform sampler2D u_texture1;
 
 vec4 lit(float l ,float h, float m) {
   return vec4(1.0,
@@ -27,8 +27,8 @@ void main() {
   float isBack = (-sign(faceCheck) + 1.0) * 0.5;
   vec3 reflection = vec3(faceCheck, faceCheck, faceCheck);
 
-  vec4 frontTexture = texture2D(u_texture, v_texCoord.xy) * vec4(isFront, isFront, isFront, 1.0);
-  vec4 backTexture = texture2D(u_textureBack, v_texCoord.xy) * vec4(isBack, isBack, isBack, 1.0);
+  vec4 frontTexture = texture2D(u_texture0, v_texCoord.xy) * vec4(isFront, isFront, isFront, 1.0);
+  vec4 backTexture = texture2D(u_texture1, v_texCoord.xy) * vec4(isBack, isBack, isBack, 1.0);
   vec4 texColor = frontTexture + backTexture;
 
   vec3 halfVector = normalize((surfaceToLight) + (surfaceToView * reflection));
