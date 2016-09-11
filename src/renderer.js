@@ -14,6 +14,8 @@ var foldFs = glslify('./fold-fs.glsl');
 var foldVs = glslify('./fold-vs.glsl');
 var drawFs = glslify('./draw-fs.glsl');
 var drawVs = glslify('./draw-vs.glsl');
+var ssaoVs = glslify('./ssao-vs.glsl');
+var ssaoFs = glslify('./ssao-fs.glsl');
 var depthnormalFs = glslify('./depthnormal-fs.glsl');
 
 var m4 = require('gl-mat4');
@@ -55,6 +57,7 @@ var Renderer = function (canvas) {
 
   this.shaders = {};
   this.buffers = {};
+  this.fboIndex = 0;
   this.framebuffers = [null, null];
   this.initialize(canvas);
   return this;
@@ -73,6 +76,7 @@ Renderer.prototype.initialize = function (canvas) {
     this.shaders.depth = createShader(gl, faceVs, depthnormalFs);
     this.shaders.fold = createShader(gl, foldVs, foldFs);
     this.shaders.draw = createShader(gl, drawVs, drawFs);
+    this.shaders.ssao = createShader(gl, ssaoVs, ssaoFs);
     this.buffers.quad = getQuad(gl);
     this.framebuffers[0] = createFBO(gl, [canvas.width, canvas.height]);
     this.framebuffers[1] = createFBO(gl, [canvas.width, canvas.height]);
@@ -117,6 +121,10 @@ Renderer.prototype.stop = function () {
 
 Renderer.prototype.render = function () {
   var gl = this.gl;
+  var shaders = this.shaders;
+  var buffers = this.buffers;
+  var uniforms = this.uniforms;
+  var textures = this.glTextures;
 
   if (this.update() || this.resize() || this.snap()) {
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
@@ -136,30 +144,52 @@ Renderer.prototype.render = function () {
     m4.multiply(this.uniforms.u_worldView, this.uniforms.u_view, this.uniforms.u_world);
     m4.multiply(this.uniforms.u_worldViewProjection, projection, this.uniforms.u_worldView);
 
-    this.framebuffers[0].bind();
-    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    renderPass(gl, this.shaders.depth, this.buffers.face, this.uniforms, 'TRIANGLES');
+    uniforms.u_sampleBuffer = this.renderSwap(function () {
+      renderPass(gl, shaders.depth, buffers.face, uniforms, 'TRIANGLES');
+    });
 
-    this.framebuffers[1].bind();
-    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    this.uniforms.u_texture = this.glTextures[0].bind(0);
-    this.uniforms.u_textureBack = this.glTextures[1].bind(1);
-    renderPass(gl, this.shaders.face, this.buffers.face, this.uniforms, 'TRIANGLES');
+    uniforms.u_sampleBuffer = this.renderSwap(function () {
+      renderPass(gl, shaders.ssao, buffers.quad, uniforms, 'TRIANGLES');
+    });
 
-    // Swap to display
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    this.uniforms.u_depthBuffer = this.framebuffers[0].color[0].bind(2);
-    this.uniforms.u_origamiBuffer = this.framebuffers[1].color[0].bind(3);
-    renderPass(gl, this.shaders.draw, this.buffers.quad, this.uniforms, 'TRIANGLES');
+    uniforms.u_origamiBuffer = this.renderSwap(function () {
+      uniforms.u_texture = textures[0].bind(0);
+      uniforms.u_textureBack = textures[1].bind(1);
+      renderPass(gl, shaders.face, buffers.face, uniforms, 'TRIANGLES');
+    });
+
+    this.renderBuffer(null, function () {
+      renderPass(gl, shaders.draw, buffers.quad, uniforms, 'TRIANGLES');
+    });
 
     this.update(false);
   }
 
   this.raf = requestAnimationFrame(this.render);
+};
+
+Renderer.prototype.renderSwap = function (render) {
+  var index = this.fboIndex;
+  var fbo = this.framebuffers[index];
+
+  this.fboIndex = (index + 1) % 2;
+  this.renderBuffer(fbo, render);
+
+  return fbo.color[0].bind(index + 2);
+};
+
+Renderer.prototype.renderBuffer = function (fbo, render) {
+  var gl = this.gl;
+
+  if (fbo == null) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  } else {
+    fbo.bind();
+  }
+
+  gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  render();
 };
 
 Renderer.prototype.update = function (force) {
