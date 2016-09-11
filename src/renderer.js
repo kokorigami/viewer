@@ -14,7 +14,6 @@ var foldFs = glslify('./fold-fs.glsl');
 var foldVs = glslify('./fold-vs.glsl');
 var drawFs = glslify('./draw-fs.glsl');
 var drawVs = glslify('./draw-vs.glsl');
-var ssaoVs = glslify('./ssao-vs.glsl');
 var ssaoFs = glslify('./ssao-fs.glsl');
 var depthnormalFs = glslify('./depthnormal-fs.glsl');
 
@@ -25,8 +24,7 @@ var Renderer = function (canvas) {
   this.canvas = null;
   this.raf = null;
   this.textures = [null, null];
-
-  this.glTextures = [];
+  this.glTextures = [null, null];
   this.render = this.render.bind(this);
 
   this.camera = createCamera({
@@ -49,10 +47,10 @@ var Renderer = function (canvas) {
     u_world: m4.create(),
     u_worldView: m4.create(),
     u_worldViewProjection: m4.create(),
-    u_texture: 0,
-    u_textureBack: 1,
-    u_depthBuffer: 2,
-    u_origamiBuffer: 3
+    u_origami: 0,
+    u_sampler: 1,
+    u_texture0: 2,
+    u_texture1: 3
   };
 
   this.shaders = {};
@@ -76,7 +74,7 @@ Renderer.prototype.initialize = function (canvas) {
     this.shaders.depth = createShader(gl, faceVs, depthnormalFs);
     this.shaders.fold = createShader(gl, foldVs, foldFs);
     this.shaders.draw = createShader(gl, drawVs, drawFs);
-    this.shaders.ssao = createShader(gl, ssaoVs, ssaoFs);
+    this.shaders.ssao = createShader(gl, drawVs, ssaoFs);
     this.buffers.quad = getQuad(gl);
     this.framebuffers[0] = createFBO(gl, [canvas.width, canvas.height]);
     this.framebuffers[1] = createFBO(gl, [canvas.width, canvas.height]);
@@ -124,37 +122,17 @@ Renderer.prototype.render = function () {
   var shaders = this.shaders;
   var buffers = this.buffers;
   var uniforms = this.uniforms;
-  var textures = this.glTextures;
 
   if (this.update() || this.resize() || this.snap()) {
-    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-    var projection = m4.create();
-    m4.perspective(
-      projection,
-      Math.PI/4.0,
-      gl.drawingBufferWidth/gl.drawingBufferHeight,
-      this.uniforms.u_near,
-      this.uniforms.u_far
-    );
-
-    m4.invert(this.uniforms.u_camera, this.uniforms.u_view);
-    m4.copy(this.uniforms.u_world, this.camera.computedMatrix);
-    m4.multiply(this.uniforms.u_worldView, this.uniforms.u_view, this.uniforms.u_world);
-    m4.multiply(this.uniforms.u_worldViewProjection, projection, this.uniforms.u_worldView);
-
-    uniforms.u_sampleBuffer = this.renderSwap(function () {
+    uniforms.u_sampler = this.renderSwap(function () {
       renderPass(gl, shaders.depth, buffers.face, uniforms, 'TRIANGLES');
     });
 
-    uniforms.u_sampleBuffer = this.renderSwap(function () {
+    uniforms.u_sampler = this.renderSwap(function () {
       renderPass(gl, shaders.ssao, buffers.quad, uniforms, 'TRIANGLES');
     });
 
-    uniforms.u_origamiBuffer = this.renderSwap(function () {
-      uniforms.u_texture = textures[0].bind(0);
-      uniforms.u_textureBack = textures[1].bind(1);
+    uniforms.u_origami = this.renderSwap(function () {
       renderPass(gl, shaders.face, buffers.face, uniforms, 'TRIANGLES');
     });
 
@@ -170,26 +148,26 @@ Renderer.prototype.render = function () {
 
 Renderer.prototype.renderSwap = function (render) {
   var index = this.fboIndex;
-  var fbo = this.framebuffers[index];
-
   this.fboIndex = (index + 1) % 2;
-  this.renderBuffer(fbo, render);
-
-  return fbo.color[0].bind(index + 2);
+  return this.renderBuffer(index, render);
 };
 
-Renderer.prototype.renderBuffer = function (fbo, render) {
+Renderer.prototype.renderBuffer = function (fboIndex, render) {
   var gl = this.gl;
+  var isFBO = fboIndex != null;
+  var fbo = null;
 
-  if (fbo == null) {
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  } else {
+  if (!isFBO) gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  else {
+    fbo = this.framebuffers[fboIndex];
     fbo.bind();
   }
 
   gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   render();
+
+  if (isFBO) return fbo.color[0].bind(fboIndex);
 };
 
 Renderer.prototype.update = function (force) {
@@ -199,11 +177,33 @@ Renderer.prototype.update = function (force) {
 
 Renderer.prototype.snap = function () {
   var t = Date.now();
-  this.camera.idle(t - 20);
-  this.camera.flush(t - 100);
-  this.camera.recalcMatrix(t - 25);
+  var gl = this.gl;
+  var uniforms = this.uniforms;
+  var camera = this.camera;
 
-  return !equivalent(this.camera.computedMatrix, this.uniforms.u_world);
+  camera.idle(t - 20);
+  camera.flush(t - 100);
+  camera.recalcMatrix(t - 25);
+
+  var willUpdate = !equivalent(camera.computedMatrix, uniforms.u_world);
+
+  if (willUpdate) {
+    var projection = m4.create();
+    m4.perspective(
+      projection,
+      Math.PI/4.0,
+      gl.drawingBufferWidth/gl.drawingBufferHeight,
+      uniforms.u_near,
+      uniforms.u_far
+    );
+
+    m4.invert(uniforms.u_camera, uniforms.u_view);
+    m4.copy(uniforms.u_world, camera.computedMatrix);
+    m4.multiply(uniforms.u_worldView, uniforms.u_view, uniforms.u_world);
+    m4.multiply(uniforms.u_worldViewProjection, projection, uniforms.u_worldView);
+  }
+
+  return willUpdate;
 };
 
 Renderer.prototype.resize = function () {
@@ -224,11 +224,16 @@ Renderer.prototype.resize = function () {
 
 Renderer.prototype.texturize = function (sources) {
   var updateTexture = function (name, resource, i) {
+    var offset = this.framebuffers.length;
+    var uniform = 'u_texture' + i;
+
     if (this.glTextures[i]) {
       this.glTextures[i].dispose();
     }
     this.textures[i] = name;
     this.glTextures[i] = createTexture(this.gl, resource);
+
+    this.uniforms[uniform] = this.glTextures[i].bind(offset + i);
     this.update(true);
   }.bind(this);
 

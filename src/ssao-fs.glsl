@@ -1,9 +1,9 @@
 precision mediump float;
 
 varying vec2 v_position;
-varying vec2 v_texcoord;
+varying vec2 v_uv;
 
-uniform sampler2D u_sampleBuffer;
+uniform sampler2D u_sampler;
 uniform vec2 u_screen;
 uniform float u_near;
 uniform float u_far;
@@ -19,7 +19,7 @@ vec3 decode_normal (vec3 encoded) {
 }
 
 vec4 read_depthnormal(vec2 texcoord) {
-  vec4 encoded = texture2D(u_sampleBuffer, texcoord);
+  vec4 encoded = texture2D(u_sampler, texcoord);
   vec4 decoded = vec4(decode_normal(encoded.stp), decode_depth(encoded.q));
   return decoded;
 }
@@ -64,7 +64,7 @@ float read_AO (vec2 texcoord) {
 }
 
 void main() {
-  //float AO = read_AO(v_texcoord);
+  //float AO = read_AO(v_uv);
   //gl_FragColor = vec4(AO, AO, AO, 1.0);
   gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
 }
