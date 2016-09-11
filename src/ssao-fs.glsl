@@ -66,5 +66,5 @@ float read_AO (vec2 texcoord) {
 void main() {
   //float AO = read_AO(v_uv);
   //gl_FragColor = vec4(AO, AO, AO, 1.0);
-  gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+  gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
 }

@@ -1,23 +1,25 @@
-var createContext = require('gl-context');
-var createShader = require('gl-shader');
-var createGeometry = require('gl-geometry');
-var createCamera = require('3d-view');
-var createTexture = require('gl-texture2d');
-var createFBO = require('gl-fbo');
-var getPixels = require('get-pixels');
-var getQuad = require('gl-big-quad');
+{
+  var createContext = require('gl-context');
+  var createShader = require('gl-shader');
+  var createGeometry = require('gl-geometry');
+  var createCamera = require('3d-view');
+  var createTexture = require('gl-texture2d');
+  var createFBO = require('gl-fbo');
+  var getPixels = require('get-pixels');
+  var getQuad = require('gl-big-quad');
 
-var glslify = require('glslify');
-var faceFs = glslify('./face-fs.glsl');
-var faceVs = glslify('./face-vs.glsl');
-var foldFs = glslify('./fold-fs.glsl');
-var foldVs = glslify('./fold-vs.glsl');
-var drawFs = glslify('./draw-fs.glsl');
-var drawVs = glslify('./draw-vs.glsl');
-var ssaoFs = glslify('./ssao-fs.glsl');
-var depthnormalFs = glslify('./depthnormal-fs.glsl');
+  var glslify = require('glslify');
+  var faceFs = glslify('./face-fs.glsl');
+  var faceVs = glslify('./face-vs.glsl');
+  var foldFs = glslify('./fold-fs.glsl');
+  var foldVs = glslify('./fold-vs.glsl');
+  var drawFs = glslify('./draw-fs.glsl');
+  var drawVs = glslify('./draw-vs.glsl');
+  var ssaoFs = glslify('./ssao-fs.glsl');
+  var depthnormalFs = glslify('./depthnormal-fs.glsl');
 
-var m4 = require('gl-mat4');
+  var m4 = require('gl-mat4');
+}
 
 var Renderer = function (canvas) {
   this.gl = null;
