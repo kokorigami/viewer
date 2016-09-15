@@ -10,6 +10,7 @@
   "dependencies": {
     "3d-view": "^2.0.0",
     "get-pixels": "^3.3.0",
+    "get-plane-normal": "^1.0.0",
     "gl-big-quad": "^1.0.0",
     "gl-context": "^0.1.1",
     "gl-fbo": "^2.0.5",
