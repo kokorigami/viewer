@@ -11,7 +11,7 @@ function computeFrameNormals(frame) {
     normals[i] = normals[i+1] = normals[i+2] = normal;
   }
 
-  frame.normals = normals;
+  return normals;
 }
 
 var Model = function (data) {
@@ -32,7 +32,9 @@ Model.prototype.set = function (data) {
   this.naturals = data.naturals || [];
   this.frames = data.frames || [];
   this.fps = data.fps || 1;
-  this.frames.forEach(computeFrameNormals);
+  this.frames.forEach(function(frame) {
+    frame.normals = computeFrameNormals(frame);
+  });
   return this;
 };
 
