@@ -8,7 +8,7 @@ uniform vec2 u_screen;
 uniform float u_near;
 uniform float u_far;
 
-const int numChecks = 8;
+const int numChecks = 4;
 
 float decode_depth (float depth) {
   return depth * (u_far - u_near) + u_near;
@@ -33,7 +33,7 @@ float read_horizon(vec2 texcoord, vec2 direction) {
     vec2 offset = float(i) * direction;
     vec2 offsetcoord = texcoord + onePixel * offset;
     float offsetdepth = read_depthnormal(offsetcoord).q;
-    // float hyp = distance(vec3(0, 0, depth), vec3(offsetcoord, offsetdepth));
+    float hyp = distance(vec3(0, 0, depth), vec3(offsetcoord, offsetdepth));
     // sinH = max(sinH, offsetdepth / hyp);
     sinH = max(sinH, (offsetdepth - depth));
   }
@@ -59,12 +59,11 @@ float read_AO (vec2 texcoord) {
   sinH_dnY = read_horizon(texcoord, vec2(0, -1));
 
   float AO = sinH_upX + sinH_dnX + sinH_upY + sinH_dnY;
-  //float AO = (sinH_upX - sinT_X) + (sinH_dnX + sinT_X) + (sinH_upY - sinT_Y) + (sinH_dnY + sinT_Y);
+  // float AO = (sinH_upX - sinT_X) + (sinH_dnX + sinT_X) + (sinH_upY - sinT_Y) + (sinH_dnY + sinT_Y);
   return AO;
 }
 
 void main() {
-  //float AO = read_AO(v_uv);
-  //gl_FragColor = vec4(AO, AO, AO, 1.0);
-  gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
+  float AO = read_AO(v_uv);
+  gl_FragColor = vec4(0.0, 0.0, 0.0, AO);
 }

@@ -49,6 +49,7 @@ var Renderer = function (canvas) {
     u_world: m4.create(),
     u_worldView: m4.create(),
     u_worldViewProjection: m4.create(),
+    u_screen: [1, 1],
     u_origami: 0,
     u_sampler: 1,
     u_texture0: 2,
@@ -219,6 +220,7 @@ Renderer.prototype.resize = function () {
     canvas.height = height;
     this.framebuffers[0].shape = [width, height];
     this.framebuffers[1].shape = [width, height];
+    this.uniforms.u_screen = [width, height];
     return true;
   }
   return false;
