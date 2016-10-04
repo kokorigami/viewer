@@ -38,7 +38,6 @@ function ActionBar(viewer, el) {
     var width = target.clientWidth;
 
     var scrub = function (e) {
-      console.log(e.offsetX);
       var amt = e.offsetX / width;
       var total = viewer.model.frames.length;
       var frame = Math.round(amt * total);
@@ -46,7 +45,6 @@ function ActionBar(viewer, el) {
     };
 
     var endScrub = function () {
-      console.log('out');
       target.removeEventListener('mousemove', scrub);
       target.removeEventListener('mouseup', endScrub);
       target.removeEventListener('mouseout', endScrub);
