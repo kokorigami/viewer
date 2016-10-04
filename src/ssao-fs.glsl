@@ -11,7 +11,8 @@ uniform float u_far;
 const int numChecks = 4;
 
 float decode_depth (float depth) {
-  return depth * (u_far - u_near) + u_near;
+  float adjusted = depth - 1.0;
+  return adjusted * (u_far - u_near) + u_near;
 }
 
 vec3 decode_normal (vec3 encoded) {
@@ -25,41 +26,34 @@ vec4 read_depthnormal(vec2 texcoord) {
 }
 
 float read_horizon(vec2 texcoord, vec2 direction) {
-  float sinH = 0.0;
-  float depth = read_depthnormal(texcoord).q;
+  float delta = 0.0;
+  vec4 depthnormal = read_depthnormal(texcoord);
+  vec3 normal = depthnormal.stp;
+  float depth = depthnormal.q;
   vec2 onePixel = vec2(1, 1) / u_screen;
 
   for (int i = 1; i < numChecks + 1; i++) {
     vec2 offset = float(i) * direction;
     vec2 offsetcoord = texcoord + onePixel * offset;
     float offsetdepth = read_depthnormal(offsetcoord).q;
-    float hyp = distance(vec3(0, 0, depth), vec3(offsetcoord, offsetdepth));
-    // sinH = max(sinH, offsetdepth / hyp);
-    sinH = max(sinH, (offsetdepth - depth));
+    vec3 origToPoint = vec3(offsetcoord, offsetdepth) - vec3(0, 0, depth);
+    delta = max(delta, dot(origToPoint, normal) * 100.0);
   }
-  return sinH;
+  return delta;
 }
 
 float read_AO (vec2 texcoord) {
-  vec4 decoded = read_depthnormal(texcoord);
-  float sinT_X = decoded.x;
-  float sinT_Y = decoded.y;
-  float sinH_upX = 0.0;
-  float sinH_dnX = 0.0;
-  float sinH_upY = 0.0;
-  float sinH_dnY = 0.0;
+  float right = 0.0;
+  float left = 0.0;
+  float down = 0.0;
+  float up = 0.0;
 
-  // Up x
-  sinH_upX = read_horizon(texcoord, vec2(1, 0));
-  // Down x
-  sinH_dnX = read_horizon(texcoord, vec2(-1, 0));
-  // Up y
-  sinH_upY = read_horizon(texcoord, vec2(0, 1));
-  // Down y
-  sinH_dnY = read_horizon(texcoord, vec2(0, -1));
+  right = read_horizon(texcoord, vec2(1, 0));
+  left = read_horizon(texcoord, vec2(-1, 0));
+  down = read_horizon(texcoord, vec2(0, 1));
+  up = read_horizon(texcoord, vec2(0, -1));
 
-  float AO = sinH_upX + sinH_dnX + sinH_upY + sinH_dnY;
-  // float AO = (sinH_upX - sinT_X) + (sinH_dnX + sinT_X) + (sinH_upY - sinT_Y) + (sinH_dnY + sinT_Y);
+  float AO = right + left + down + up;
   return AO;
 }
 

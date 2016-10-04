@@ -42,8 +42,8 @@ var Renderer = function (canvas) {
     u_lightColor: [1, 0.9, 0.8, 1],
     u_ambient: [0.2, 0.2, 0.3, 1],
     u_shininess: 10,
-    u_near: 1,
-    u_far: 10,
+    u_near: 0,
+    u_far: 8,
     u_view: m4.create(),
     u_camera: m4.create(),
     u_world: m4.create(),
@@ -127,21 +127,33 @@ Renderer.prototype.render = function () {
   var uniforms = this.uniforms;
 
   if (this.update() || this.resize() || this.snap()) {
-    uniforms.u_sampler = this.renderSwap(function () {
+    this.renderBuffer(null, function () {
       renderPass(gl, shaders.depth, buffers.face, uniforms, 'TRIANGLES');
     });
 
-    uniforms.u_sampler = this.renderSwap(function () {
-      renderPass(gl, shaders.ssao, buffers.quad, uniforms, 'TRIANGLES');
-    });
+    // --------
 
-    uniforms.u_origami = this.renderSwap(function () {
-      renderPass(gl, shaders.face, buffers.face, uniforms, 'TRIANGLES');
-    });
+    // uniforms.u_sampler = this.renderSwap(function () {
+    //   renderPass(gl, shaders.depth, buffers.face, uniforms, 'TRIANGLES');
+    // });
 
-    this.renderBuffer(null, function () {
-      renderPass(gl, shaders.draw, buffers.quad, uniforms, 'TRIANGLES');
-    });
+    // this.renderBuffer(null, function () {
+    //   renderPass(gl, shaders.ssao, buffers.quad, uniforms, 'TRIANGLES');
+    // });
+
+    // --------
+
+    // uniforms.u_sampler = this.renderSwap(function () {
+    //   renderPass(gl, shaders.ssao, buffers.quad, uniforms, 'TRIANGLES');
+    // });
+
+    // uniforms.u_origami = this.renderSwap(function () {
+    //   renderPass(gl, shaders.face, buffers.face, uniforms, 'TRIANGLES');
+    // });
+
+    // this.renderBuffer(null, function () {
+    //   renderPass(gl, shaders.draw, buffers.quad, uniforms, 'TRIANGLES');
+    // });
 
     this.update(false);
   }
@@ -196,7 +208,7 @@ Renderer.prototype.snap = function () {
       projection,
       Math.PI/4.0,
       gl.drawingBufferWidth/gl.drawingBufferHeight,
-      uniforms.u_near,
+      1.0,
       uniforms.u_far
     );
 

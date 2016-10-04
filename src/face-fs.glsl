@@ -1,5 +1,5 @@
 precision mediump float;
-varying vec3 v_normal;
+varying vec3 v_normalWorld;
 varying vec3 v_texCoord;
 varying vec3 v_surfaceToLight;
 varying vec3 v_surfaceToView;
@@ -18,7 +18,7 @@ vec4 lit(float l ,float h, float m) {
 }
 
 void main() {
-  vec3 normal = normalize(v_normal);
+  vec3 normal = normalize(v_normalWorld);
   vec3 surfaceToLight = normalize(v_surfaceToLight);
   vec3 surfaceToView = normalize(v_surfaceToView);
 
