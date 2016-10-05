@@ -12,13 +12,15 @@
   margin: auto;
   width: 300px;
   max-width: 100%;
-  height: 50px;
+  height: 70px;
   z-index: 1;
+  user-select: none;
+  display: flex;
 }
 
 .kokorigami-action-bar button {
-  height: 20px;
-  width: 20px;
+  height: 50px;
+  width: 30px;
   background-color: transparent;
   padding: 0;
   border: none;
@@ -30,36 +32,46 @@
   fill: black;
 }
 
-.kokorigami-action-bar .progress-bar {
+.kokorigami-action-bar .progress {
   position: relative;
-  background-color: #b3e2cd;
+  width: 100%;
+  height: 50px;
+  padding: 20px 0;
+  box-sizing: border-box;
+}
+
+.kokorigami-action-bar .progress-bar {
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
   width: 100%;
   height: 10px;
+  margin: auto;
+  background-color: rgba(255, 255, 255, 0.4);
+  border-radius: 5px;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  pointer-events: none;
 }
 
 .kokorigami-action-bar .bar {
-  position: absolute;
-  top: 0; left: 0;
   width: 0;
   height: 100%;
-  background-color: #66c2a5;
-  pointer-events: none;
+  border-radius: 3px;
+  background-color: black;
+  opacity: 0.2;
 }
 
 .kokorigami-action-bar .steps {
   position: relative;
   height: 100%;
   width: 100%;
+  pointer-events: none;
 }
 
 .kokorigami-action-bar .steps div {
   position: absolute;
-  border-left: 1px solid grey;
+  border-left: 1px solid black;
   height: 100%;
-}
-
-.kokorigami-action-bar .steps div:hover {
-  background-color: rgba(0, 0, 0, 0.1);
+  opacity: 0.1;
 }
 
 .kokorigami-action-bar .steps div:first-of-type {
